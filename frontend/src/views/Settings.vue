@@ -39,8 +39,8 @@
           class="slider"
         />
         <div class="terminal-preview" :style="{ fontSize: terminalFontSize + 'px' }">
-          $ claude --continue<br>
-          Welcome to Claude Code...
+          <span class="term-green">$</span> claude --continue<br>
+          <span class="term-cyan">Welcome to Claude Code...</span>
         </div>
       </div>
 
@@ -330,20 +330,20 @@ function resetAllShortcuts() {
 .settings-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 .settings-item {
   background: var(--bg-secondary);
   border-radius: var(--border-radius);
-  padding: 16px;
+  padding: 12px;
 }
 
 .settings-label {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .settings-label span:first-child {
@@ -376,20 +376,39 @@ function resetAllShortcuts() {
 }
 
 .font-preview {
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: 8px;
+  padding: 10px;
   background: var(--bg-card);
   border-radius: 8px;
 }
 
 .terminal-preview {
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: 8px;
+  padding: 10px;
   background: #0d1117;
   border-radius: 8px;
   font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
-  line-height: 1.4;
+  line-height: 1.5;
+  color: #58a6ff;
+  position: relative;
 }
+
+.terminal-preview::after {
+  content: '▋';
+  animation: cursor-blink 1s infinite;
+  color: #fff;
+}
+
+@keyframes cursor-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.term-green { color: #3fb950; }
+.term-cyan { color: #58a6ff; }
+.term-yellow { color: #d29922; }
+.term-red { color: #f85149; }
+.term-magenta { color: #bc8cff; }
 
 .server-config {
   border: 1px solid var(--border-color, #333);
@@ -398,11 +417,11 @@ function resetAllShortcuts() {
 .settings-hint {
   font-size: 0.85em;
   color: #888;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .server-input-group {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .server-input-group label {
@@ -414,9 +433,9 @@ function resetAllShortcuts() {
 
 .text-input {
   width: 100%;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--border-color, #333);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--bg-card, #1a1a2e);
   color: var(--text-color, #fff);
   font-size: 14px;
@@ -430,13 +449,13 @@ function resetAllShortcuts() {
 
 .server-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .server-actions .btn {
   flex: 1;
-  padding: 10px 16px;
+  padding: 8px 12px;
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -472,8 +491,8 @@ function resetAllShortcuts() {
 }
 
 .server-info {
-  margin-top: 12px;
-  padding: 8px 12px;
+  margin-top: 8px;
+  padding: 6px 10px;
   background: var(--bg-card, #1a1a2e);
   border-radius: 6px;
   font-size: 0.85em;
@@ -490,13 +509,13 @@ function resetAllShortcuts() {
 }
 
 .shortcut-section {
-  margin-top: 16px;
-  padding-top: 12px;
+  margin-top: 12px;
+  padding-top: 8px;
   border-top: 1px solid var(--border-color, #333);
 }
 
 .shortcut-section:first-of-type {
-  margin-top: 12px;
+  margin-top: 8px;
   padding-top: 0;
   border-top: none;
 }
@@ -505,7 +524,7 @@ function resetAllShortcuts() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .section-header h4 {
@@ -517,14 +536,14 @@ function resetAllShortcuts() {
 .shortcut-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .shortcut-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 6px 10px;
   background: var(--bg-card, #1a1a2e);
   border-radius: 6px;
   font-size: 0.85em;
