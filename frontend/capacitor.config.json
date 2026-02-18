@@ -1,0 +1,24 @@
+{
+  "appId": "com.claude.remote",
+  "appName": "Claude Remote",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#1e1e1e",
+    "allowMixedContent": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "backgroundColor": "#1a1a2e",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false,
+      "fadeOutDuration": 500
+    },
+    "StatusBar": {
+      "style": "Dark",
+      "backgroundColor": "#1a1a2e"
+    }
+  }
+}
