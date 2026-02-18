@@ -10,7 +10,7 @@ import os
 
 from services.database import get_db
 from services.auth import get_current_active_user
-from services.terminal_service import SHORTCUT_KEYS
+from services.terminal_service import SHORTCUT_KEYS, validate_tmux_key
 from models.user import User
 from models.task import Task
 from platform_utils import get_terminal_service, is_root
@@ -337,7 +337,12 @@ async def send_shortcut(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """发送快捷键"""
+    """发送快捷键
+
+    支持两种模式:
+    1. 预定义快捷键: { "key": "ctrl_c" } - 使用 SHORTCUT_KEYS 映射
+    2. tmux 格式: { "key": "C-c", "isTmuxFormat": true } - 直接使用 tmux 格式
+    """
     task = db.query(Task).filter(
         Task.id == task_id,
         Task.user_id == current_user.id
@@ -351,17 +356,32 @@ async def send_shortcut(
         raise HTTPException(status_code=400, detail="会话已结束")
 
     shortcut = shortcut_data.get("key", "")
-    if shortcut not in SHORTCUT_KEYS:
-        raise HTTPException(status_code=400, detail="未知快捷键")
+    is_tmux_format = shortcut_data.get("isTmuxFormat", False)
 
-    keys = SHORTCUT_KEYS[shortcut]
+    if is_tmux_format:
+        # 新模式：直接使用 tmux 格式，验证后发送
+        if not validate_tmux_key(shortcut):
+            raise HTTPException(status_code=400, detail=f"无效的快捷键格式: {shortcut}")
 
-    # 处理原始转义序列
-    if keys.startswith("RAW:"):
-        raw_data = keys[4:]  # 去掉 "RAW:" 前缀
-        success = terminal.send_raw(task.tmux_session, raw_data)
+        # 处理原始转义序列（如果需要）
+        if shortcut.startswith("RAW:"):
+            raw_data = shortcut[4:]
+            success = terminal.send_raw(task.tmux_session, raw_data)
+        else:
+            success = terminal.send_keys(task.tmux_session, shortcut)
     else:
-        success = terminal.send_keys(task.tmux_session, keys)
+        # 旧模式：使用预定义映射
+        if shortcut not in SHORTCUT_KEYS:
+            raise HTTPException(status_code=400, detail="未知快捷键")
+
+        keys = SHORTCUT_KEYS[shortcut]
+
+        # 处理原始转义序列
+        if keys.startswith("RAW:"):
+            raw_data = keys[4:]  # 去掉 "RAW:" 前缀
+            success = terminal.send_raw(task.tmux_session, raw_data)
+        else:
+            success = terminal.send_keys(task.tmux_session, keys)
 
     if not success:
         raise HTTPException(status_code=500, detail="发送快捷键失败")

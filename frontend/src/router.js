@@ -6,7 +6,6 @@ import NewTask from './views/NewTask.vue'
 import Settings from './views/Settings.vue'
 import Setup from './views/Setup.vue'
 import FileBrowser from './views/FileBrowser.vue'
-import TerminalTest from './views/TerminalTest.vue'
 import ProxyView from './views/ProxyView.vue'
 
 const routes = [
@@ -51,12 +50,6 @@ const routes = [
     name: 'FileBrowser',
     component: FileBrowser,
     meta: { requiresAuth: true }
-  },
-  {
-    path: '/terminal-test',
-    name: 'TerminalTest',
-    component: TerminalTest,
-    meta: { requiresAuth: false }
   },
   {
     path: '/proxy',

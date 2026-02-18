@@ -14,62 +14,77 @@
       <span class="spinner"></span>
     </div>
 
-    <div v-else-if="tasks.length === 0" class="empty-state">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-        <line x1="9" y1="9" x2="15" y2="9"></line>
-        <line x1="9" y1="13" x2="15" y2="13"></line>
-        <line x1="9" y1="17" x2="12" y2="17"></line>
-      </svg>
-      <p>暂无任务</p>
-      <p style="font-size: 0.75rem; margin-top: 8px;">点击右下角按钮创建新任务</p>
-    </div>
+    <template v-else>
+      <!-- 筛选器 -->
+      <div class="filter-bar">
+        <button
+          v-for="f in filters"
+          :key="f.value"
+          :class="['filter-btn', { active: currentFilter === f.value }]"
+          @click="currentFilter = f.value"
+        >
+          {{ f.label }}
+          <span v-if="f.count > 0" class="filter-count">{{ f.count }}</span>
+        </button>
+      </div>
 
-    <div v-else>
-      <div
-        v-for="task in tasks"
-        :key="task.id"
-        class="card task-item"
-        @click="goToTask(task.id)"
-      >
-        <div class="card-header">
-          <span class="card-title">{{ task.name }}</span>
-          <span :class="['status-badge', 'status-' + task.status]">
-            {{ statusText(task.status) }}
-          </span>
-        </div>
-        <div class="card-subtitle">{{ task.work_dir }}</div>
-        <div v-if="task.session_name" class="card-subtitle">会话: {{ task.session_name }}</div>
-        <div class="actions">
-          <button
-            class="btn btn-sm btn-secondary"
-            @click.stop="openSettings(task)"
-          >
-            配置
-          </button>
-          <button
-            v-if="task.status === 'stopped'"
-            class="btn btn-sm btn-primary"
-            @click.stop="restoreTask(task.id)"
-          >
-            恢复
-          </button>
-          <button
-            v-if="task.status === 'running'"
-            class="btn btn-sm btn-secondary"
-            @click.stop="stopTask(task.id)"
-          >
-            终止
-          </button>
-          <button
-            class="btn btn-sm btn-danger"
-            @click.stop="deleteTask(task.id)"
-          >
-            删除
-          </button>
+      <div v-if="filteredTasks.length === 0" class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="9" y1="9" x2="15" y2="9"></line>
+          <line x1="9" y1="13" x2="15" y2="13"></line>
+          <line x1="9" y1="17" x2="12" y2="17"></line>
+        </svg>
+        <p>{{ currentFilter === 'all' ? '暂无任务' : '没有' + getFilterLabel(currentFilter) + '的任务' }}</p>
+        <p v-if="currentFilter === 'all'" style="font-size: 0.75rem; margin-top: 8px;">点击右下角按钮创建新任务</p>
+      </div>
+
+      <div v-else class="task-list">
+        <div
+          v-for="task in filteredTasks"
+          :key="task.id"
+          :class="['card', 'task-item', { 'task-stopped': task.status === 'stopped' }]"
+          @click="goToTask(task.id)"
+        >
+          <div class="card-header">
+            <span class="card-title">{{ task.name }}</span>
+            <span :class="['status-badge', 'status-' + task.status]">
+              {{ statusText(task.status) }}
+            </span>
+          </div>
+          <div class="card-subtitle">{{ task.work_dir }}</div>
+          <div v-if="task.session_name" class="card-subtitle">会话: {{ task.session_name }}</div>
+          <div class="actions">
+            <button
+              class="btn btn-sm btn-secondary"
+              @click.stop="openSettings(task)"
+            >
+              配置
+            </button>
+            <button
+              v-if="task.status === 'stopped'"
+              class="btn btn-sm btn-primary"
+              @click.stop="restoreTask(task.id)"
+            >
+              恢复
+            </button>
+            <button
+              v-if="task.status === 'running'"
+              class="btn btn-sm btn-secondary"
+              @click.stop="stopTask(task.id)"
+            >
+              终止
+            </button>
+            <button
+              class="btn btn-sm btn-danger"
+              @click.stop="deleteTask(task.id)"
+            >
+              删除
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </template>
 
     <button class="fab" @click="goToNew">+</button>
 
@@ -107,7 +122,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
 
@@ -118,11 +133,32 @@ const tasks = ref([])
 const showSettings = ref(false)
 const savingSettings = ref(false)
 const currentTask = ref(null)
+const currentFilter = ref('all')
 
 const settings = reactive({
   skip_permissions: false,
   teammate_mode: false
 })
+
+// 筛选器配置
+const filters = computed(() => [
+  { value: 'all', label: '全部', count: tasks.value.length },
+  { value: 'running', label: '运行中', count: tasks.value.filter(t => t.status === 'running').length },
+  { value: 'stopped', label: '已停止', count: tasks.value.filter(t => t.status === 'stopped').length },
+])
+
+// 筛选后的任务列表
+const filteredTasks = computed(() => {
+  if (currentFilter.value === 'all') {
+    return tasks.value
+  }
+  return tasks.value.filter(t => t.status === currentFilter.value)
+})
+
+function getFilterLabel(filter) {
+  const map = { running: '运行中', stopped: '已停止' }
+  return map[filter] || filter
+}
 
 onMounted(() => {
   loadTasks()
@@ -230,13 +266,73 @@ function logout() {
   gap: 8px;
 }
 
+/* 筛选器样式 */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color, #333);
+  border-radius: 16px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  background: var(--bg-card);
+}
+
+.filter-btn.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+.filter-count {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+}
+
+.filter-btn.active .filter-count {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .task-item {
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: transform 0.2s, opacity 0.2s;
 }
 
 .task-item:active {
   transform: scale(0.98);
+}
+
+/* 已停止任务灰显 */
+.task-stopped {
+  opacity: 0.6;
+}
+
+.task-stopped:hover {
+  opacity: 0.8;
 }
 
 /* 设置弹窗 */

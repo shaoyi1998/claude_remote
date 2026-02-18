@@ -44,8 +44,8 @@
           </div>
         </div>
 
-        <!-- 快捷键面板 -->
-        <div class="shortcuts-panel">
+        <!-- 横屏时的快捷键面板 -->
+        <div class="shortcuts-panel desktop-panel">
           <!-- 基础方向键 -->
           <div class="shortcuts-row">
             <button class="btn btn-sm btn-secondary" @click="sendShortcut('escape')">Esc</button>
@@ -96,7 +96,7 @@
               <button v-for="hk in enabledShortcutsList" :key="hk.id"
                 class="btn btn-sm btn-hk"
                 :title="hk.description"
-                @click="sendShortcutByKey(hk.key)">
+                @click="sendShortcutByItem(hk)">
                 {{ hk.label }}
               </button>
             </div>
@@ -115,18 +115,121 @@
           </div>
         </div>
       </div>
+
+      <!-- 底部固定按钮栏 - 竖屏时显示 -->
+      <div class="bottom-bar">
+        <button class="bar-btn" @click="showInputPanel = true">快捷输入</button>
+        <button class="bar-btn" @click="showShortcutPanel = true">快捷键</button>
+        <button class="bar-btn" @click="showMorePanel = true">更多</button>
+      </div>
     </template>
+
+    <!-- 快捷输入浮动面板 -->
+    <Transition name="slide-up">
+      <div v-if="showInputPanel" class="floating-panel" @click.self="closeAllPanels">
+        <!-- 终端预览条 -->
+        <div class="terminal-preview">
+          <div class="preview-content">{{ terminalPreviewLines || '$ ' }}</div>
+        </div>
+        <div class="panel-content glass-panel">
+          <div class="panel-header">
+            <span class="panel-title">快捷输入</span>
+            <button class="close-btn" @click="showInputPanel = false">×</button>
+          </div>
+          <div class="panel-grid">
+            <button v-for="btn in inputButtons" :key="btn.action"
+              class="grid-btn"
+              @click="handleInput(btn)"
+              @touchstart.prevent="btn.action === 'backspace' ? startBackspaceRepeat() : null"
+              @touchend="btn.action === 'backspace' ? stopBackspaceRepeat() : null">
+              {{ btn.label }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 快捷键浮动面板 -->
+    <Transition name="slide-up">
+      <div v-if="showShortcutPanel" class="floating-panel" @click.self="closeAllPanels">
+        <!-- 终端预览条 -->
+        <div class="terminal-preview">
+          <div class="preview-content">{{ terminalPreviewLines || '$ ' }}</div>
+        </div>
+        <div class="panel-content glass-panel">
+          <div class="panel-header">
+            <span class="panel-title">快捷键</span>
+            <button class="close-btn" @click="showShortcutPanel = false">×</button>
+          </div>
+          <!-- 快捷命令 -->
+          <div v-if="enabledCommands.length > 0" class="panel-section">
+            <div class="section-title">命令</div>
+            <div class="panel-grid cmd-grid">
+              <button v-for="cmd in enabledCommands" :key="cmd.id"
+                class="grid-btn"
+                @click="sendCommand(cmd.command); showShortcutPanel = false; scrollToBottom()">
+                {{ cmd.label }}
+              </button>
+            </div>
+          </div>
+          <!-- 自定义快捷键 -->
+          <div v-if="enabledShortcutsList.length > 0" class="panel-section">
+            <div class="section-title">快捷键</div>
+            <div class="panel-grid hk-grid">
+              <button v-for="hk in enabledShortcutsList" :key="hk.id"
+                class="grid-btn"
+                @click="sendShortcutByItem(hk); showShortcutPanel = false; scrollToBottom()">
+                {{ hk.label }}
+              </button>
+            </div>
+          </div>
+          <div v-if="enabledCommands.length === 0 && enabledShortcutsList.length === 0" class="empty-tip">
+            暂无自定义快捷键，请在设置中添加
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 更多浮动面板 -->
+    <Transition name="slide-up">
+      <div v-if="showMorePanel" class="floating-panel" @click.self="closeAllPanels">
+        <!-- 终端预览条 -->
+        <div class="terminal-preview">
+          <div class="preview-content">{{ terminalPreviewLines || '$ ' }}</div>
+        </div>
+        <div class="panel-content glass-panel">
+          <div class="panel-header">
+            <span class="panel-title">更多</span>
+            <button class="close-btn" @click="showMorePanel = false">×</button>
+          </div>
+          <div class="more-list">
+            <button class="more-item" @click="toggleLockFromPanel">
+              <span class="more-icon">{{ inputLocked ? '🔓' : '🔒' }}</span>
+              <span>{{ inputLocked ? '解锁终端' : '锁定终端' }}</span>
+            </button>
+            <button class="more-item" @click="openFileBrowserFromPanel">
+              <span class="more-icon">📁</span>
+              <span>浏览文件</span>
+            </button>
+            <button v-if="task?.status === 'stopped'" class="more-item" @click="restoreFromPanel">
+              <span class="more-icon">▶️</span>
+              <span>恢复会话</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import 'xterm/css/xterm.css'
 import api, { getServerAddress } from '../api'
-import { getEnabledCommands, getEnabledShortcuts } from '../stores/shortcuts'
+import { getEnabledCommands, getEnabledShortcuts, keyToTmux, getKeyDisplayName } from '../stores/shortcuts'
 
 const router = useRouter()
 const route = useRoute()
@@ -137,13 +240,44 @@ const terminalConnecting = ref(false)
 const terminalContainer = ref(null)
 const inputLocked = ref(false)
 
-// 面板展开状态
+// 面板展开状态 (横屏用)
 const showCommandsPanel = ref(true)
 const showShortcutsPanel = ref(false)
+
+// 浮动面板状态 (竖屏用)
+const showInputPanel = ref(false)
+const showShortcutPanel = ref(false)
+const showMorePanel = ref(false)
+
+// 基础输入按钮配置
+const inputButtons = [
+  { label: 'Esc', action: 'escape' },
+  { label: '↑', action: 'up' },
+  { label: '↓', action: 'down' },
+  { label: '←', action: 'left' },
+  { label: '→', action: 'right' },
+  { label: 'Enter', action: 'enter' },
+  { label: '退格', action: 'backspace' },
+  { label: '/', action: 'text', value: '/' },
+  { label: '底部', action: 'scrollBottom' },
+  { label: 'S↑', action: 'shift_up' },
+  { label: 'S↓', action: 'shift_down' },
+  { label: 'S⇥', action: 'shift_tab' },
+]
 
 // 获取启用的快捷键配置
 const enabledCommands = computed(() => getEnabledCommands())
 const enabledShortcutsList = computed(() => getEnabledShortcuts())
+
+// 终端预览内容
+const terminalPreviewLines = ref('')
+
+// 监听面板打开状态，自动滚动到底部
+watch([showInputPanel, showShortcutPanel, showMorePanel], (vals) => {
+  if (vals.some(v => v)) {
+    scrollToBottom()
+  }
+})
 
 let terminal = null
 let fitAddon = null
@@ -258,7 +392,11 @@ function initTerminal() {
     })
   })
 
-  terminal.focus()
+  // 移动端不自动聚焦，避免弹出输入法
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  if (!isMobile) {
+    terminal.focus()
+  }
 
   window.addEventListener('resize', handleResize)
 
@@ -318,6 +456,8 @@ function connectWebSocket() {
             terminal.clear()
             terminal.write(msg.data)
           }
+          // 更新终端预览内容
+          updateTerminalPreview()
         }
       } catch (e) {
         console.error('WebSocket message error:', e)
@@ -412,6 +552,39 @@ function scrollToBottom() {
   if (terminal) {
     terminal.scrollToBottom()
     if (!inputLocked.value) terminal.focus()
+  }
+}
+
+// 更新终端预览内容（获取可见区域最后3行）
+function updateTerminalPreview() {
+  if (!terminal) return
+  try {
+    const buffer = terminal.buffer.active
+    const lines = []
+
+    // 获取 buffer 长度和可见行数
+    const bufferLength = buffer.length
+    const visibleRows = terminal.rows
+
+    // 可见区域的起始行（当在底部时）
+    // 如果 bufferLength < visibleRows，说明内容不够一屏
+    const visibleStart = Math.max(0, bufferLength - visibleRows)
+    const visibleEnd = bufferLength
+
+    // 从可见区域底部向上获取非空行
+    for (let i = visibleEnd - 1; i >= visibleStart && lines.length < 3; i--) {
+      const line = buffer.getLine(i)
+      if (line) {
+        const text = line.translateToString(true)
+        if (text.trim()) {
+          lines.unshift(text)
+        }
+      }
+    }
+
+    terminalPreviewLines.value = lines.join('\n') || '$ '
+  } catch (e) {
+    terminalPreviewLines.value = '$ '
   }
 }
 
@@ -514,10 +687,20 @@ function toggleShortcutsPanel() {
   showShortcutsPanel.value = !showShortcutsPanel.value
 }
 
-// 通过按键值发送快捷键
+// 通过按键值发送快捷键（旧版兼容）
 async function sendShortcutByKey(key) {
   try {
     await api.post(`/tasks/${route.params.id}/shortcut`, { key })
+  } catch (e) {
+    error.value = e.response?.data?.detail || '发送快捷键失败'
+  }
+}
+
+// 通过快捷键对象发送（新版）
+async function sendShortcutByItem(shortcut) {
+  try {
+    const tmuxKey = keyToTmux(shortcut)
+    await api.post(`/tasks/${route.params.id}/shortcut`, { key: tmuxKey, isTmuxFormat: true })
   } catch (e) {
     error.value = e.response?.data?.detail || '发送快捷键失败'
   }
@@ -531,15 +714,60 @@ function openFileBrowser() {
     router.push(`/files/${route.params.id}`)
   }
 }
+
+// 处理基础输入按钮
+function handleInput(btn) {
+  if (btn.action === 'scrollBottom') {
+    scrollToBottom()
+  } else if (btn.action === 'text') {
+    sendText(btn.value)
+  } else {
+    sendShortcut(btn.action)
+  }
+  // 操作后自动滚动到底部
+  scrollToBottom()
+}
+
+// 关闭所有浮动面板
+function closeAllPanels() {
+  showInputPanel.value = false
+  showShortcutPanel.value = false
+  showMorePanel.value = false
+}
+
+// 从更多面板锁定/解锁
+function toggleLockFromPanel() {
+  toggleLock()
+  showMorePanel.value = false
+}
+
+// 从更多面板打开文件浏览器
+function openFileBrowserFromPanel() {
+  showMorePanel.value = false
+  openFileBrowser()
+}
+
+// 从更多面板恢复会话
+async function restoreFromPanel() {
+  showMorePanel.value = false
+  await restoreTask()
+}
 </script>
 
 <style scoped>
-/* 页面容器 - 使用 dvh 自动响应键盘 */
+/* 页面容器 - 使用固定高度避免键盘弹出时布局错乱 */
 .page {
   display: flex;
   flex-direction: column;
+  height: 100vh;
   height: 100dvh;
+  max-height: 100vh;
   overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 .header {
@@ -582,14 +810,14 @@ function openFileBrowser() {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 0;  /* 关键：允许 flex 子项收缩 */
+  min-height: 0;
+  max-height: calc(100dvh - 140px);  /* 减去 header + status-bar + bottom-bar 的高度 */
   overflow: hidden;
 }
 
 .terminal-wrapper {
   flex: 1;
-  min-height: 150px;
-  max-height: calc(100dvh - 280px);  /* 为快捷键面板预留空间 */
+  min-height: 100px;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -608,8 +836,8 @@ function openFileBrowser() {
   justify-content: center;
   border-radius: var(--border-radius);
   z-index: 10;
-  pointer-events: auto;      /* 拦截触摸事件，防止弹出输入法 */
-  touch-action: pan-y;       /* 允许垂直滑动 */
+  pointer-events: auto;
+  touch-action: pan-y;
   overscroll-behavior: contain;
 }
 
@@ -662,7 +890,7 @@ function openFileBrowser() {
   min-height: 100px;
   background: #1e1e1e;
   border-radius: var(--border-radius);
-  padding: 0;  /* 移除 padding，让 xterm 自己管理 */
+  padding: 0;
   margin-bottom: 8px;
   overflow: hidden;
   touch-action: pan-y;
@@ -671,7 +899,7 @@ function openFileBrowser() {
 
 /* xterm.js 样式调整 */
 .terminal-container :deep(.xterm) {
-  padding: 8px;  /* 在 xterm 内部添加 padding */
+  padding: 8px;
   box-sizing: border-box;
 }
 
@@ -725,95 +953,235 @@ function openFileBrowser() {
   scrollbar-color: #555 #2d2d2d;
 }
 
-/* 快捷键面板 - 竖屏 */
-.shortcuts-panel {
-  flex-shrink: 0;  /* 不允许收缩 */
-  min-height: fit-content;
-  background: var(--bg-secondary);
-  border-radius: var(--border-radius);
-  padding: 8px;
-  margin-bottom: 8px;
+/* 桌面端快捷键面板 - 默认隐藏 */
+.desktop-panel {
+  display: none;
 }
 
-.shortcuts-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.shortcuts-row:last-child {
-  margin-bottom: 0;
-}
-
-.shortcuts-row .btn {
-  padding: 12px 8px;
-  font-size: 0.85rem;
-}
-
-.restore-bar {
-  margin-top: 8px;
-}
-
-/* 快捷键分区 */
-.shortcuts-section {
-  margin-top: 8px;
-  border-top: 1px solid var(--border-color, #333);
-  padding-top: 8px;
-}
-
-.section-header {
+/* 底部固定按钮栏 */
+.bottom-bar {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 4px;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color, #333);
+  flex-shrink: 0;
+  min-height: 52px;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+.bar-btn {
+  flex: 1;
+  padding: 12px 8px;
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-color);
+  font-size: 0.9rem;
+  border: none;
   cursor: pointer;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  user-select: none;
+  transition: background 0.2s;
 }
 
-.section-header:hover {
-  background: var(--bg-card);
-  border-radius: 4px;
-}
-
-.toggle-icon {
-  font-size: 0.7rem;
-}
-
-/* 快捷键网格 */
-.shortcuts-grid {
-  display: grid;
-  gap: 4px;
-  margin-top: 6px;
-}
-
-.commands-grid {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.hk-grid {
-  grid-template-columns: repeat(4, 1fr);
-}
-
-.btn-cmd, .btn-hk {
-  padding: 8px 4px;
-  font-size: 0.7rem;
-  background: var(--bg-card);
-  color: var(--text-secondary);
-}
-
-.btn-cmd:hover, .btn-hk:hover {
+.bar-btn:active {
   background: var(--primary-color);
   color: #fff;
 }
 
-/* 文件浏览器入口 */
-.file-browser-entry {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border-color, #333);
+/* 浮动面板 */
+.floating-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* 毛玻璃面板 */
+.glass-panel {
+  background: rgba(30, 30, 30, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* 终端预览条 */
+.terminal-preview {
+  background: rgba(20, 20, 20, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 6px 10px;
+  margin: 0 8px 4px 8px;
+  border-radius: 8px 8px 0 0;
+  min-height: 50px;
+  max-height: 70px;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.preview-content {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  color: #d4d4d4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.3;
+}
+
+.panel-content {
+  background: var(--bg-primary, #1a1a1a);
+  border-radius: 16px 16px 0 0;
+  padding: 16px;
+  max-height: 50vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.panel-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 按钮网格 */
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.grid-btn {
+  padding: 12px 6px;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: var(--text-color);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+  touch-action: manipulation;
+}
+
+.grid-btn:active {
+  background: var(--primary-color);
+  color: #fff;
+  transform: scale(0.95);
+}
+
+/* 命令网格 - 3列 */
+.cmd-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* 快捷键网格 - 4列 */
+.hk-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* 分区 */
+.panel-section {
+  margin-bottom: 16px;
+}
+
+.panel-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+
+/* 空提示 */
+.empty-tip {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  padding: 20px;
+}
+
+/* 更多面板列表 */
+.more-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.more-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  color: var(--text-color);
+  font-size: 0.95rem;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.more-item:active {
+  background: var(--primary-color);
+  color: #fff;
+}
+
+.more-icon {
+  font-size: 1.2rem;
+}
+
+/* 滑入动画 */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.25s ease;
+}
+
+.slide-up-enter-active .panel-content,
+.slide-up-leave-active .panel-content,
+.slide-up-enter-active .terminal-preview,
+.slide-up-leave-active .terminal-preview {
+  transition: transform 0.25s ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  background: rgba(0, 0, 0, 0);
+}
+
+.slide-up-enter-from .panel-content,
+.slide-up-leave-to .panel-content,
+.slide-up-enter-from .terminal-preview,
+.slide-up-leave-to .terminal-preview {
+  transform: translateY(100%);
 }
 
 /* 横屏布局 */
@@ -828,27 +1196,106 @@ function openFileBrowser() {
   .terminal-wrapper {
     flex: 1;
     min-width: 0;
-    max-height: none;  /* 横屏时移除最大高度限制 */
   }
 
   .terminal-container {
     height: calc(100dvh - 100px);
-    max-height: none;
     margin-bottom: 0;
   }
 
-  .shortcuts-panel {
-    width: 200px;
-    flex-shrink: 0;
+  /* 横屏时显示桌面面板，隐藏底部栏 */
+  .desktop-panel {
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    padding: 8px;
+    max-height: calc(100dvh - 100px);
+    overflow-y: auto;
+  }
+
+  .bottom-bar {
+    display: none;
+  }
+
+  .shortcuts-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .shortcuts-row:last-child {
     margin-bottom: 0;
   }
 
   .shortcuts-row .btn {
     padding: 10px 6px;
     font-size: 0.8rem;
+  }
+
+  .restore-bar {
+    margin-top: 8px;
+  }
+
+  .shortcuts-section {
+    margin-top: 8px;
+    border-top: 1px solid var(--border-color, #333);
+    padding-top: 8px;
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    user-select: none;
+  }
+
+  .section-header:hover {
+    background: var(--bg-card);
+    border-radius: 4px;
+  }
+
+  .toggle-icon {
+    font-size: 0.7rem;
+  }
+
+  .shortcuts-grid {
+    display: grid;
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .commands-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .hk-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .btn-cmd, .btn-hk {
+    padding: 8px 4px;
+    font-size: 0.7rem;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+  }
+
+  .btn-cmd:hover, .btn-hk:hover {
+    background: var(--primary-color);
+    color: #fff;
+  }
+
+  .file-browser-entry {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color, #333);
   }
 }
 </style>

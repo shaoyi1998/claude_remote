@@ -91,3 +91,60 @@ SHORTCUT_KEYS = {
     "shift_down": "S-Down",
     "shift_tab": "RAW:\x1b[Z",  # Shift+Tab 原始转义序列
 }
+
+# 有效的 tmux 修饰键前缀
+VALID_MODIFIERS = {'C', 'S', 'M'}
+
+# 有效的按键名称
+VALID_KEYS = {
+    # 字母
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+    'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    # 数字
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+    # 功能键
+    'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12',
+    # 特殊键
+    'Tab', 'Home', 'End', 'Insert', 'Delete', 'PageUp', 'PageDown',
+    'Escape', 'Enter', 'BSpace', 'Up', 'Down', 'Left', 'Right',
+}
+
+
+def validate_tmux_key(key: str) -> bool:
+    """
+    验证 tmux 格式的按键是否有效
+
+    支持格式:
+    - 单键: 'a', 'F1', 'Enter'
+    - 单修饰键: 'C-c', 'S-Tab', 'M-a'
+    - 双修饰键: 'C-S-c', 'C-M-a'
+
+    Args:
+        key: tmux 格式的按键字符串
+
+    Returns:
+        bool: 是否为有效的 tmux 按键格式
+    """
+    if not key:
+        return False
+
+    parts = key.split('-')
+
+    # 单键情况
+    if len(parts) == 1:
+        return parts[0] in VALID_KEYS
+
+    # 组合键情况：最后一部分是按键，其余是修饰键
+    key_part = parts[-1]
+    modifiers = parts[:-1]
+
+    # 验证按键
+    if key_part not in VALID_KEYS:
+        return False
+
+    # 验证修饰键
+    for mod in modifiers:
+        if mod not in VALID_MODIFIERS:
+            return False
+
+    return True

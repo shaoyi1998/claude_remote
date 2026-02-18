@@ -3,6 +3,46 @@
  * 支持自定义命令按钮和自定义快捷键
  */
 
+// 可用的修饰键
+export const availableModifiers = [
+  { value: '', label: '无' },
+  { value: 'C', label: 'Ctrl' },
+  { value: 'S', label: 'Shift' },
+  { value: 'M', label: 'Alt' },
+]
+
+// 可用的按键选项
+export const availableKeyOptions = [
+  // 字母
+  { value: 'a', label: 'A' }, { value: 'b', label: 'B' }, { value: 'c', label: 'C' },
+  { value: 'd', label: 'D' }, { value: 'e', label: 'E' }, { value: 'f', label: 'F' },
+  { value: 'g', label: 'G' }, { value: 'h', label: 'H' }, { value: 'i', label: 'I' },
+  { value: 'j', label: 'J' }, { value: 'k', label: 'K' }, { value: 'l', label: 'L' },
+  { value: 'm', label: 'M' }, { value: 'n', label: 'N' }, { value: 'o', label: 'O' },
+  { value: 'p', label: 'P' }, { value: 'q', label: 'Q' }, { value: 'r', label: 'R' },
+  { value: 's', label: 'S' }, { value: 't', label: 'T' }, { value: 'u', label: 'U' },
+  { value: 'v', label: 'V' }, { value: 'w', label: 'W' }, { value: 'x', label: 'X' },
+  { value: 'y', label: 'Y' }, { value: 'z', label: 'Z' },
+  // 数字
+  { value: '0', label: '0' }, { value: '1', label: '1' }, { value: '2', label: '2' },
+  { value: '3', label: '3' }, { value: '4', label: '4' }, { value: '5', label: '5' },
+  { value: '6', label: '6' }, { value: '7', label: '7' }, { value: '8', label: '8' },
+  { value: '9', label: '9' },
+  // 功能键
+  { value: 'F1', label: 'F1' }, { value: 'F2', label: 'F2' }, { value: 'F3', label: 'F3' },
+  { value: 'F4', label: 'F4' }, { value: 'F5', label: 'F5' }, { value: 'F6', label: 'F6' },
+  { value: 'F7', label: 'F7' }, { value: 'F8', label: 'F8' }, { value: 'F9', label: 'F9' },
+  { value: 'F10', label: 'F10' }, { value: 'F11', label: 'F11' }, { value: 'F12', label: 'F12' },
+  // 特殊键
+  { value: 'Tab', label: 'Tab' },
+  { value: 'Home', label: 'Home' },
+  { value: 'End', label: 'End' },
+  { value: 'Insert', label: 'Insert' },
+  { value: 'Delete', label: 'Delete' },
+  { value: 'PageUp', label: 'PageUp' },
+  { value: 'PageDown', label: 'PageDown' },
+]
+
 // 默认快捷键配置
 const defaultShortcuts = {
   // 基础方向键（固定）
@@ -16,42 +56,26 @@ const defaultShortcuts = {
     { id: 'backspace', key: 'BSpace', label: '退格', type: 'basic', enabled: true },
   ],
 
-  // 自定义命令按钮（可编辑命令和标签）
+  // 自定义命令按钮（可编辑命令和标签）- 精简为 4 个
   commands: [
     { id: 'cmd1', label: '/compact', command: '/compact', enabled: true },
     { id: 'cmd2', label: '/clear', command: '/clear', enabled: true },
     { id: 'cmd3', label: '/help', command: '/help', enabled: true },
     { id: 'cmd4', label: '/rewind', command: '/rewind', enabled: true },
-    { id: 'cmd5', label: '/mcp', command: '/mcp', enabled: true },
-    { id: 'cmd6', label: '/exit', command: '/exit', enabled: true },
-    { id: 'cmd7', label: '/doctor', command: '/doctor', enabled: false },
-    { id: 'cmd8', label: '/permissions', command: '/permissions', enabled: false },
   ],
 
-  // 自定义快捷键（可设置组合键）
+  // 自定义快捷键（新数据结构）- 精简为 4 个默认
   shortcuts: [
-    { id: 'hk1', label: 'Ctrl+C', key: 'C-c', description: '中断', enabled: true },
-    { id: 'hk2', label: 'Ctrl+D', key: 'C-d', description: '退出', enabled: true },
-    { id: 'hk3', label: 'Ctrl+L', key: 'C-l', description: '清屏', enabled: true },
-    { id: 'hk4', label: 'Ctrl+R', key: 'C-r', description: '搜索', enabled: true },
-    { id: 'hk5', label: 'Ctrl+Z', key: 'C-z', description: '后台', enabled: false },
-    { id: 'hk6', label: 'Ctrl+A', key: 'C-a', description: '行首', enabled: false },
-    { id: 'hk7', label: 'Ctrl+E', key: 'C-e', description: '行尾', enabled: false },
-    { id: 'hk8', label: 'Ctrl+K', key: 'C-k', description: '删到行尾', enabled: false },
-    { id: 'hk9', label: 'Ctrl+U', key: 'C-u', description: '删到行首', enabled: false },
-    { id: 'hk10', label: 'Ctrl+W', key: 'C-w', description: '删词', enabled: false },
-    { id: 'hk11', label: 'F1', key: 'F1', description: '', enabled: false },
-    { id: 'hk12', label: 'F2', key: 'F2', description: '', enabled: false },
-    { id: 'hk13', label: 'F3', key: 'F3', description: '', enabled: false },
-    { id: 'hk14', label: 'F4', key: 'F4', description: '', enabled: false },
-    { id: 'hk15', label: 'F5', key: 'F5', description: '', enabled: false },
-    { id: 'hk16', label: 'F6', key: 'F6', description: '', enabled: false },
+    { id: 'hk1', label: '中断', modifiers: ['C'], key: 'c', description: '中断当前命令', enabled: true },
+    { id: 'hk2', label: '退出', modifiers: ['C'], key: 'd', description: '退出/EOF', enabled: true },
+    { id: 'hk3', label: '清屏', modifiers: ['C'], key: 'l', description: '清空屏幕', enabled: true },
+    { id: 'hk4', label: '搜索', modifiers: ['C'], key: 'r', description: '搜索历史', enabled: true },
   ]
 }
 
 // 获取快捷键配置
 export function getShortcuts() {
-  const saved = localStorage.getItem('shortcuts_v2')
+  const saved = localStorage.getItem('shortcuts_v3')
   if (saved) {
     try {
       const parsed = JSON.parse(saved)
@@ -70,12 +94,12 @@ export function getShortcuts() {
 
 // 保存快捷键配置
 export function saveShortcuts(shortcuts) {
-  localStorage.setItem('shortcuts_v2', JSON.stringify(shortcuts))
+  localStorage.setItem('shortcuts_v3', JSON.stringify(shortcuts))
 }
 
 // 重置为默认配置
 export function resetShortcuts() {
-  localStorage.removeItem('shortcuts_v2')
+  localStorage.removeItem('shortcuts_v3')
   return JSON.parse(JSON.stringify(defaultShortcuts))
 }
 
@@ -130,7 +154,87 @@ export function deleteShortcut(category, id) {
   return shortcuts
 }
 
-// 可用的按键选项（用于配置快捷键）
+/**
+ * 将新数据结构转换为 tmux 格式
+ * @param {Object} shortcut - 快捷键对象 { modifiers: ['C', 'S'], key: 'c' }
+ * @returns {string} tmux 格式的按键，如 'C-S-c'
+ */
+export function keyToTmux(shortcut) {
+  if (!shortcut) return ''
+
+  const { modifiers = [], key = '' } = shortcut
+
+  // 如果没有修饰键，直接返回按键
+  if (!modifiers.length || modifiers.every(m => !m)) {
+    return key
+  }
+
+  // 过滤空修饰键，拼接成 tmux 格式
+  const validModifiers = modifiers.filter(m => m)
+  if (validModifiers.length === 0) {
+    return key
+  }
+
+  // tmux 格式：C-S-c (Ctrl+Shift+c)
+  return [...validModifiers, key].join('-')
+}
+
+/**
+ * 从 tmux 格式解析为新数据结构
+ * @param {string} tmuxKey - tmux 格式的按键，如 'C-c' 或 'C-S-c'
+ * @returns {Object} { modifiers: ['C'], key: 'c' }
+ */
+export function tmuxToKey(tmuxKey) {
+  if (!tmuxKey) return { modifiers: [], key: '' }
+
+  const parts = tmuxKey.split('-')
+  if (parts.length === 1) {
+    return { modifiers: [], key: parts[0] }
+  }
+
+  const modifiers = parts.slice(0, -1)
+  const key = parts[parts.length - 1]
+
+  return { modifiers, key }
+}
+
+/**
+ * 生成显示名称
+ * @param {Object} shortcut - 快捷键对象
+ * @returns {string} 显示名称，如 'Ctrl+C' 或 'Ctrl+Shift+Z'
+ */
+export function getKeyDisplayName(shortcut) {
+  if (!shortcut) return ''
+
+  const { modifiers = [], key = '' } = shortcut
+
+  const modifierNames = {
+    'C': 'Ctrl',
+    'S': 'Shift',
+    'M': 'Alt',
+  }
+
+  const parts = modifiers
+    .filter(m => m)
+    .map(m => modifierNames[m] || m)
+
+  if (key) {
+    parts.push(key.toUpperCase())
+  }
+
+  return parts.join('+')
+}
+
+// 兼容旧版本的按键显示名称映射
+export const keyDisplayNames = {
+  'C-': 'Ctrl+',
+  'M-': 'Alt+',
+  'S-': 'Shift+',
+  'BSpace': '退格',
+  'Up': '↑', 'Down': '↓', 'Left': '←', 'Right': '→',
+}
+
+// 兼容旧版本的 availableKeys（用于向后兼容）
 export const availableKeys = [
   // Ctrl 组合键
   'C-a', 'C-b', 'C-c', 'C-d', 'C-e', 'C-f', 'C-g', 'C-h', 'C-i', 'C-j', 'C-k', 'C-l', 'C-m',
@@ -143,21 +247,3 @@ export const availableKeys = [
   // 特殊键
   'Tab', 'S-Tab', 'Insert', 'Delete', 'Home', 'End', 'PageUp', 'PageDown',
 ]
-
-// 按键显示名称映射
-export const keyDisplayNames = {
-  'C-': 'Ctrl+',
-  'M-': 'Alt+',
-  'S-': 'Shift+',
-  'BSpace': '退格',
-  'Up': '↑', 'Down': '↓', 'Left': '←', 'Right': '→',
-}
-
-// 获取按键显示名称
-export function getKeyDisplayName(key) {
-  let name = key
-  for (const [code, display] of Object.entries(keyDisplayNames)) {
-    name = name.replace(code, display)
-  }
-  return name
-}

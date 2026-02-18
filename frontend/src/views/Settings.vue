@@ -44,19 +44,19 @@
         </div>
       </div>
 
-      <!-- 服务器配置 -->
-      <div class="settings-item server-config">
+      <!-- 服务器配置 - 仅 APK 显示 -->
+      <div v-if="isApp" class="settings-item server-config">
         <div class="settings-label">
           <span>服务器配置</span>
         </div>
-        <p class="settings-hint">配置后端服务器地址（APK 使用时需要填写电脑的局域网 IP）</p>
+        <p class="settings-hint">配置后端服务器地址（填写电脑的局域网 IP）</p>
 
         <div class="server-input-group">
           <label>服务器地址</label>
           <input
             v-model="serverHost"
             type="text"
-            placeholder="如: 192.168.1.100（留空则使用当前页面地址）"
+            placeholder="如: 192.168.1.100"
             class="text-input"
           />
         </div>
@@ -124,7 +124,7 @@
             <h4>自定义快捷键</h4>
             <button class="btn btn-sm btn-primary" @click="addNewShortcut">+ 添加</button>
           </div>
-          <p class="settings-hint">可设置 Ctrl/Alt 组合键或功能键</p>
+          <p class="settings-hint">可设置 Ctrl/Shift/Alt 组合键或功能键</p>
           <div class="shortcut-list">
             <div v-for="item in shortcuts.shortcuts" :key="item.id" class="shortcut-item editable">
               <label class="toggle-wrap">
@@ -132,33 +132,41 @@
                 <span class="toggle-slider"></span>
               </label>
               <template v-if="editingId === item.id">
-                <input v-model="editLabel" class="shortcut-input small" placeholder="显示名称" />
-                <select v-model="editKey" class="shortcut-select">
-                  <option v-for="key in availableKeys" :key="key" :value="key">{{ key }}</option>
-                </select>
-                <input v-model="editDesc" class="shortcut-input small" placeholder="说明" />
-                <button class="btn btn-sm btn-primary" @click="saveEdit('shortcuts', item.id)">保存</button>
-                <button class="btn btn-sm btn-secondary" @click="cancelEdit">取消</button>
+                <!-- 新的三列选择器 UI -->
+                <div class="shortcut-editors">
+                  <input v-model="editLabel" class="shortcut-input small" placeholder="名称" />
+                  <div class="key-selectors">
+                    <select v-model="editModifier1" class="shortcut-select">
+                      <option v-for="mod in modifierOptions" :key="mod.value" :value="mod.value">{{ mod.label }}</option>
+                    </select>
+                    <select v-model="editModifier2" class="shortcut-select">
+                      <option v-for="mod in modifierOptions" :key="mod.value" :value="mod.value">{{ mod.label }}</option>
+                    </select>
+                    <select v-model="editKey" class="shortcut-select">
+                      <option v-for="key in keyOptions" :key="key.value" :value="key.value">{{ key.label }}</option>
+                    </select>
+                  </div>
+                  <input v-model="editDesc" class="shortcut-input small" placeholder="说明" />
+                </div>
+                <div class="edit-preview">
+                  <span class="preview-label">预览:</span>
+                  <span class="preview-value">{{ editPreview }}</span>
+                </div>
+                <div class="edit-actions">
+                  <button class="btn btn-sm btn-primary" @click="saveShortcutEdit(item.id)">保存</button>
+                  <button class="btn btn-sm btn-secondary" @click="cancelEdit">取消</button>
+                </div>
               </template>
               <template v-else>
-                <div class="item-info" @click="startEditShortcut(item.id, item.label, item.key, item.description)">
+                <div class="item-info" @click="startEditShortcut(item)">
                   <span class="item-label">{{ item.label }}</span>
-                  <span class="item-desc">{{ item.key }} {{ item.description ? '- ' + item.description : '' }}</span>
+                  <span class="item-desc">{{ getShortcutDisplay(item) }} {{ item.description ? '- ' + item.description : '' }}</span>
                 </div>
                 <button class="btn btn-sm btn-danger" @click="deleteItem('shortcuts', item.id)">删除</button>
               </template>
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- 终端测试 -->
-      <div class="settings-item">
-        <div class="settings-label">
-          <span>终端测试</span>
-        </div>
-        <p class="settings-hint">测试 xterm.js 终端颜色是否正常显示</p>
-        <button class="btn btn-primary" @click="goTerminalTest">打开终端颜色测试页面</button>
       </div>
 
       <!-- 反向代理 -->
@@ -174,10 +182,22 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { saveServerConfig, getServerAddress, updateApiBaseURL } from '../api'
-import { getShortcuts, saveShortcuts as saveShortcutsToStorage, resetShortcuts, addShortcut, deleteShortcut, availableKeys } from '../stores/shortcuts'
+import {
+  getShortcuts,
+  saveShortcuts as saveShortcutsToStorage,
+  resetShortcuts,
+  addShortcut,
+  deleteShortcut,
+  availableModifiers,
+  availableKeyOptions,
+  getKeyDisplayName,
+  keyToTmux,
+  tmuxToKey,
+} from '../stores/shortcuts'
+import { isCapacitorApp } from '../utils/platform'
 
 const router = useRouter()
 const fontSize = ref(16)
@@ -185,13 +205,29 @@ const terminalFontSize = ref(14)
 const serverHost = ref('')
 const serverPort = ref('8000')
 
+// 平台检测
+const isApp = isCapacitorApp()
+
 // 快捷键配置
 const shortcuts = ref({ commands: [], shortcuts: [] })
 const editingId = ref(null)
 const editLabel = ref('')
 const editCommand = ref('')
-const editKey = ref('')
+const editModifier1 = ref('')
+const editModifier2 = ref('')
+const editKey = ref('c')
 const editDesc = ref('')
+
+// 修饰键选项（排除 '无' 用于第二列）
+const modifierOptions = computed(() => availableModifiers)
+const keyOptions = computed(() => availableKeyOptions)
+
+// 编辑预览
+const editPreview = computed(() => {
+  const modifiers = [editModifier1.value, editModifier2.value].filter(m => m)
+  const shortcut = { modifiers, key: editKey.value }
+  return getKeyDisplayName(shortcut)
+})
 
 onMounted(() => {
   // 加载保存的设置
@@ -240,10 +276,6 @@ function goBack() {
   router.push('/')
 }
 
-function goTerminalTest() {
-  router.push('/terminal-test')
-}
-
 function goProxy() {
   router.push('/proxy')
 }
@@ -274,11 +306,16 @@ function startEdit(category, id, label, command) {
   editCommand.value = command || ''
 }
 
-function startEditShortcut(id, label, key, desc) {
-  editingId.value = id
-  editLabel.value = label || ''
-  editKey.value = key || 'C-c'
-  editDesc.value = desc || ''
+function startEditShortcut(item) {
+  editingId.value = item.id
+  editLabel.value = item.label || ''
+  editDesc.value = item.description || ''
+
+  // 解析修饰键
+  const modifiers = item.modifiers || []
+  editModifier1.value = modifiers[0] || ''
+  editModifier2.value = modifiers[1] || ''
+  editKey.value = item.key || 'c'
 }
 
 function saveEdit(category, id) {
@@ -288,11 +325,21 @@ function saveEdit(category, id) {
     if (category === 'commands') {
       list[index].label = editLabel.value || editCommand.value
       list[index].command = editCommand.value
-    } else {
-      list[index].label = editLabel.value || editKey.value
-      list[index].key = editKey.value
-      list[index].description = editDesc.value
     }
+    saveShortcutsData()
+  }
+  cancelEdit()
+}
+
+function saveShortcutEdit(id) {
+  const list = shortcuts.value.shortcuts
+  const index = list.findIndex(item => item.id === id)
+  if (index !== -1) {
+    const modifiers = [editModifier1.value, editModifier2.value].filter(m => m)
+    list[index].label = editLabel.value || editPreview.value
+    list[index].modifiers = modifiers
+    list[index].key = editKey.value
+    list[index].description = editDesc.value
     saveShortcutsData()
   }
   cancelEdit()
@@ -302,7 +349,9 @@ function cancelEdit() {
   editingId.value = null
   editLabel.value = ''
   editCommand.value = ''
-  editKey.value = ''
+  editModifier1.value = ''
+  editModifier2.value = ''
+  editKey.value = 'c'
   editDesc.value = ''
 }
 
@@ -318,7 +367,8 @@ function addCommand() {
 function addNewShortcut() {
   const newItem = {
     label: '新快捷键',
-    key: 'C-c',
+    modifiers: ['C'],
+    key: 'c',
     description: '',
     enabled: true
   }
@@ -336,6 +386,10 @@ function resetAllShortcuts() {
     shortcuts.value = resetShortcuts()
     alert('已重置为默认配置！')
   }
+}
+
+function getShortcutDisplay(item) {
+  return getKeyDisplayName(item)
 }
 </script>
 
@@ -626,6 +680,54 @@ function resetAllShortcuts() {
   background: var(--bg-secondary, #2a2a3e);
   color: var(--text-color, #fff);
   font-size: 0.85em;
+}
+
+/* 快捷键编辑区域 */
+.shortcut-editors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.key-selectors {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.key-selectors .shortcut-select {
+  flex: 1;
+  min-width: 60px;
+}
+
+.edit-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg-primary, #1a1a2e);
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.preview-label {
+  color: var(--text-secondary);
+  font-size: 0.8em;
+}
+
+.preview-value {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.edit-actions {
+  display: flex;
+  gap: 6px;
+  width: 100%;
 }
 
 /* 开关样式 */
