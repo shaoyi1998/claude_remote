@@ -151,6 +151,24 @@
           </div>
         </div>
       </div>
+
+      <!-- 终端测试 -->
+      <div class="settings-item">
+        <div class="settings-label">
+          <span>终端测试</span>
+        </div>
+        <p class="settings-hint">测试 xterm.js 终端颜色是否正常显示</p>
+        <button class="btn btn-primary" @click="goTerminalTest">打开终端颜色测试页面</button>
+      </div>
+
+      <!-- 反向代理 -->
+      <div class="settings-item">
+        <div class="settings-label">
+          <span>反向代理</span>
+        </div>
+        <p class="settings-hint">通过代理访问本地开发服务器（如 Vite、Webpack 等）</p>
+        <button class="btn btn-primary" @click="goProxy">打开代理工具</button>
+      </div>
     </div>
   </div>
 </template>
@@ -220,6 +238,14 @@ function applyTerminalFontSize(size) {
 
 function goBack() {
   router.push('/')
+}
+
+function goTerminalTest() {
+  router.push('/terminal-test')
+}
+
+function goProxy() {
+  router.push('/proxy')
 }
 
 function handleSaveServerConfig() {

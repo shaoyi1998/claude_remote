@@ -8,7 +8,7 @@ import json
 import logging
 import queue
 
-from api import auth, tasks, users, files
+from api import auth, tasks, users, files, proxy
 from services.database import create_tables, SessionLocal
 from services.terminal_service import SHORTCUT_KEYS
 from models.task import Task
@@ -47,6 +47,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["认证"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["任务"])
 app.include_router(users.router, prefix="/api/users", tags=["用户"])
 app.include_router(files.router, prefix="/api/files", tags=["文件"])
+app.include_router(proxy.router, tags=["代理"])
 
 
 @app.get("/")
