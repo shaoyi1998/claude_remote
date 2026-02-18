@@ -80,11 +80,12 @@ class TmuxService(TerminalService):
         return success
 
     def get_output(self, session_name: str, lines: int = 500) -> str:
-        """获取会话输出"""
+        """获取会话输出（保留 ANSI 颜色代码）"""
         success, output = self._run_tmux(
             "capture-pane",
             "-t", session_name,
             "-p",
+            "-e",  # 保留 ANSI 转义序列（颜色代码）
             "-S", f"-{lines}"
         )
         return output if success else ""

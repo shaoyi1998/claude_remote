@@ -46,6 +46,11 @@ class FileWriteRequest(BaseModel):
     content: str
 
 
+class PathRequest(BaseModel):
+    """路径请求"""
+    path: str
+
+
 def is_path_allowed(path: str) -> bool:
     """检查路径是否允许访问"""
     if ALLOWED_BASE_DIRS is None:
@@ -317,3 +322,76 @@ async def get_file_stat(path: str = Query(..., description="文件路径")):
         raise HTTPException(status_code=403, detail="无权限访问")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取文件信息失败: {str(e)}")
+
+
+@router.post("/create")
+async def create_file(request: PathRequest):
+    """
+    创建新文件
+
+    - **path**: 文件路径
+    """
+    path = request.path
+    # 展开 ~ 为用户目录
+    path = os.path.expanduser(path)
+    # 规范化路径
+    path = os.path.normpath(path)
+    if not os.path.isabs(path):
+        path = "/" + path
+
+    # 安全检查
+    if not is_path_allowed(path):
+        raise HTTPException(status_code=403, detail="路径访问被拒绝")
+
+    # 检查文件是否已存在
+    if os.path.exists(path):
+        raise HTTPException(status_code=400, detail="文件已存在")
+
+    # 检查目录是否存在
+    dir_path = os.path.dirname(path)
+    if dir_path and not os.path.exists(dir_path):
+        raise HTTPException(status_code=400, detail="目录不存在")
+
+    try:
+        # 创建空文件
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write('')
+
+        return {"success": True, "path": path}
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="无权限创建文件")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建文件失败: {str(e)}")
+
+
+@router.post("/mkdir")
+async def create_directory(request: PathRequest):
+    """
+    创建新目录
+
+    - **path**: 目录路径
+    """
+    path = request.path
+    # 展开 ~ 为用户目录
+    path = os.path.expanduser(path)
+    # 规范化路径
+    path = os.path.normpath(path)
+    if not os.path.isabs(path):
+        path = "/" + path
+
+    # 安全检查
+    if not is_path_allowed(path):
+        raise HTTPException(status_code=403, detail="路径访问被拒绝")
+
+    # 检查目录是否已存在
+    if os.path.exists(path):
+        raise HTTPException(status_code=400, detail="目录已存在")
+
+    try:
+        os.makedirs(path)
+
+        return {"success": True, "path": path}
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="无权限创建目录")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建目录失败: {str(e)}")

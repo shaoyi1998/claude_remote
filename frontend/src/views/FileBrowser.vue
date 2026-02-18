@@ -8,6 +8,16 @@
 
     <div v-if="error" class="error-message">{{ error }}</div>
 
+    <!-- 工具栏 - 新建文件/文件夹 -->
+    <div class="toolbar">
+      <button class="btn btn-sm btn-secondary" @click="showNewFileDialog = true">
+        <span>新建文件</span>
+      </button>
+      <button class="btn btn-sm btn-secondary" @click="showNewDirDialog = true">
+        <span>新建文件夹</span>
+      </button>
+    </div>
+
     <!-- 面包屑导航 -->
     <div class="breadcrumb">
       <button class="breadcrumb-item" @click="navigateTo('/')">
@@ -55,25 +65,85 @@
       空目录
     </div>
 
-    <!-- 文件预览面板 -->
+    <!-- 文件预览/编辑面板 -->
     <div v-if="previewFile" class="preview-panel">
       <div class="preview-header">
         <span class="preview-title">{{ previewFile.name }}</span>
         <div class="preview-actions">
-          <button class="btn btn-sm btn-secondary" @click="copyContent">复制内容</button>
+          <button
+            v-if="!isEditMode"
+            class="btn btn-sm btn-primary"
+            @click="enterEditMode"
+          >
+            编辑
+          </button>
+          <template v-else>
+            <button class="btn btn-sm btn-primary" @click="saveFile" :disabled="saving">
+              {{ saving ? '保存中...' : '保存' }}
+            </button>
+            <button class="btn btn-sm btn-secondary" @click="cancelEdit">
+              取消
+            </button>
+          </template>
+          <button class="btn btn-sm btn-secondary" @click="copyContent">复制</button>
           <button class="btn btn-sm btn-secondary" @click="closePreview">关闭</button>
         </div>
       </div>
       <div v-if="previewLoading" class="preview-loading">
         <span class="spinner"></span>
       </div>
+      <!-- 编辑模式：Monaco Editor -->
+      <div v-else-if="isEditMode" ref="editorContainer" class="editor-container"></div>
+      <!-- 预览模式：高亮显示 -->
       <pre v-else class="preview-content"><code :class="previewLanguage" v-html="highlightedContent"></code></pre>
+    </div>
+
+    <!-- 新建文件对话框 -->
+    <div v-if="showNewFileDialog" class="dialog-overlay" @click.self="showNewFileDialog = false">
+      <div class="dialog">
+        <h3>新建文件</h3>
+        <input
+          v-model="newFileName"
+          type="text"
+          class="input"
+          placeholder="文件名（如：test.py）"
+          @keyup.enter="createNewFile"
+          ref="newFileInput"
+        />
+        <div class="dialog-actions">
+          <button class="btn btn-secondary" @click="showNewFileDialog = false">取消</button>
+          <button class="btn btn-primary" @click="createNewFile" :disabled="creating">
+            {{ creating ? '创建中...' : '创建' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 新建文件夹对话框 -->
+    <div v-if="showNewDirDialog" class="dialog-overlay" @click.self="showNewDirDialog = false">
+      <div class="dialog">
+        <h3>新建文件夹</h3>
+        <input
+          v-model="newDirName"
+          type="text"
+          class="input"
+          placeholder="文件夹名"
+          @keyup.enter="createNewDir"
+          ref="newDirInput"
+        />
+        <div class="dialog-actions">
+          <button class="btn btn-secondary" @click="showNewDirDialog = false">取消</button>
+          <button class="btn btn-primary" @click="createNewDir" :disabled="creating">
+            {{ creating ? '创建中...' : '创建' }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
 import hljs from 'highlight.js/lib/core'
@@ -89,6 +159,9 @@ import markdown from 'highlight.js/lib/languages/markdown'
 import sql from 'highlight.js/lib/languages/sql'
 import typescript from 'highlight.js/lib/languages/typescript'
 import 'highlight.js/styles/atom-one-dark.css'
+
+// Monaco Editor
+import * as monaco from 'monaco-editor'
 
 // 注册语言
 hljs.registerLanguage('javascript', javascript)
@@ -114,6 +187,21 @@ const previewFile = ref(null)
 const previewContent = ref('')
 const previewLoading = ref(false)
 const workDir = ref('')
+
+// 编辑模式相关
+const isEditMode = ref(false)
+const editorContainer = ref(null)
+const saving = ref(false)
+let editor = null
+
+// 新建文件/文件夹相关
+const showNewFileDialog = ref(false)
+const showNewDirDialog = ref(false)
+const newFileName = ref('')
+const newDirName = ref('')
+const creating = ref(false)
+const newFileInput = ref(null)
+const newDirInput = ref(null)
 
 // 计算路径分段
 const pathParts = computed(() => {
@@ -151,6 +239,29 @@ const previewLanguage = computed(() => {
   return langMap[ext] || ''
 })
 
+// 获取Monaco语言ID
+function getMonacoLanguage(extension) {
+  const langMap = {
+    '.js': 'javascript',
+    '.jsx': 'javascript',
+    '.ts': 'typescript',
+    '.tsx': 'typescript',
+    '.py': 'python',
+    '.json': 'json',
+    '.sh': 'shell',
+    '.bash': 'shell',
+    '.css': 'css',
+    '.html': 'html',
+    '.xml': 'xml',
+    '.yaml': 'yaml',
+    '.yml': 'yaml',
+    '.md': 'markdown',
+    '.sql': 'sql',
+    '.txt': 'plaintext'
+  }
+  return langMap[extension?.toLowerCase()] || 'plaintext'
+}
+
 // 高亮内容
 const highlightedContent = computed(() => {
   if (!previewContent.value) return ''
@@ -181,6 +292,23 @@ onMounted(() => {
   workDir.value = route.query.workDir || ''
 
   navigateTo(initialPath)
+})
+
+// 监听对话框打开，自动聚焦输入框
+watch(showNewFileDialog, async (val) => {
+  if (val) {
+    newFileName.value = ''
+    await nextTick()
+    newFileInput.value?.focus()
+  }
+})
+
+watch(showNewDirDialog, async (val) => {
+  if (val) {
+    newDirName.value = ''
+    await nextTick()
+    newDirInput.value?.focus()
+  }
 })
 
 // 监听路由变化
@@ -240,6 +368,7 @@ async function openPreview(item) {
   previewFile.value = item
   previewContent.value = ''
   previewLoading.value = true
+  isEditMode.value = false
 
   try {
     const res = await api.get('/files/read', {
@@ -256,6 +385,12 @@ async function openPreview(item) {
 function closePreview() {
   previewFile.value = null
   previewContent.value = ''
+  isEditMode.value = false
+  // 销毁编辑器
+  if (editor) {
+    editor.dispose()
+    editor = null
+  }
 }
 
 async function copyContent() {
@@ -266,6 +401,117 @@ async function copyContent() {
     } catch (e) {
       alert('复制失败')
     }
+  }
+}
+
+// 进入编辑模式
+async function enterEditMode() {
+  isEditMode.value = true
+  await nextTick()
+
+  if (editorContainer.value && previewFile.value) {
+    // 销毁旧编辑器
+    if (editor) {
+      editor.dispose()
+    }
+
+    // 创建新编辑器
+    editor = monaco.editor.create(editorContainer.value, {
+      value: previewContent.value,
+      language: getMonacoLanguage(previewFile.value.extension),
+      theme: 'vs-dark',
+      fontSize: 14,
+      fontFamily: 'Consolas, Monaco, Courier New, monospace',
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      automaticLayout: true,
+      tabSize: 2,
+      wordWrap: 'on',
+      lineNumbers: 'on',
+      renderLineHighlight: 'line'
+    })
+  }
+}
+
+// 取消编辑
+function cancelEdit() {
+  isEditMode.value = false
+  if (editor) {
+    editor.dispose()
+    editor = null
+  }
+}
+
+// 保存文件
+async function saveFile() {
+  if (!editor || !previewFile.value) return
+
+  const content = editor.getValue()
+  saving.value = true
+
+  try {
+    await api.post('/files/write', { content }, {
+      params: { path: previewFile.value.path }
+    })
+    previewContent.value = content
+    isEditMode.value = false
+    editor.dispose()
+    editor = null
+    alert('保存成功')
+    // 刷新文件列表
+    loadDirectory(currentPath.value)
+  } catch (e) {
+    alert('保存失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    saving.value = false
+  }
+}
+
+// 创建新文件
+async function createNewFile() {
+  if (!newFileName.value.trim()) {
+    alert('请输入文件名')
+    return
+  }
+
+  creating.value = true
+  const filePath = currentPath.value === '/'
+    ? '/' + newFileName.value.trim()
+    : currentPath.value + '/' + newFileName.value.trim()
+
+  try {
+    await api.post('/files/create', { path: filePath })
+    showNewFileDialog.value = false
+    newFileName.value = ''
+    loadDirectory(currentPath.value)
+  } catch (e) {
+    alert('创建失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    creating.value = false
+  }
+}
+
+// 创建新文件夹
+async function createNewDir() {
+  if (!newDirName.value.trim()) {
+    alert('请输入文件夹名')
+    return
+  }
+
+  creating.value = true
+  const dirPath = currentPath.value === '/'
+    ? '/' + newDirName.value.trim()
+    : currentPath.value + '/' + newDirName.value.trim()
+
+  try {
+    await api.post('/files/mkdir', { path: dirPath })
+    showNewDirDialog.value = false
+    newDirName.value = ''
+    loadDirectory(currentPath.value)
+  } catch (e) {
+    alert('创建失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    creating.value = false
   }
 }
 
@@ -340,6 +586,14 @@ function formatTime(timestamp) {
 .header h1 {
   text-align: center;
   font-size: 1rem;
+}
+
+/* 工具栏 */
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 /* 面包屑导航 */
@@ -448,7 +702,7 @@ function formatTime(timestamp) {
   color: var(--text-secondary);
 }
 
-/* 预览面板 */
+/* 预览/编辑面板 */
 .preview-panel {
   position: fixed;
   top: 0;
@@ -468,6 +722,7 @@ function formatTime(timestamp) {
   padding: 12px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color, #333);
+  flex-shrink: 0;
 }
 
 .preview-title {
@@ -506,6 +761,62 @@ function formatTime(timestamp) {
 .preview-content code {
   background: transparent;
   padding: 0;
+}
+
+/* Monaco 编辑器容器 */
+.editor-container {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* 对话框 */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.dialog {
+  background: var(--bg-secondary, #2d2d3d);
+  border-radius: 8px;
+  padding: 20px;
+  width: 90%;
+  max-width: 400px;
+}
+
+.dialog h3 {
+  margin: 0 0 16px 0;
+  font-size: 1rem;
+}
+
+.dialog .input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  background: var(--bg-primary, #1a1a2e);
+  color: var(--text-color, #e0e0e0);
+  font-size: 0.9rem;
+  box-sizing: border-box;
+}
+
+.dialog .input:focus {
+  outline: none;
+  border-color: var(--primary-color, #61afef);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
 }
 
 /* 响应式 */

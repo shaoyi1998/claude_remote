@@ -28,6 +28,11 @@
         <!-- 终端区域 - 使用 xterm.js -->
         <div class="terminal-wrapper">
           <div ref="terminalContainer" class="terminal-container" @click="handleTerminalClick"></div>
+          <!-- 终端连接加载动画 -->
+          <div v-if="terminalConnecting" class="terminal-loading-overlay">
+            <div class="terminal-loading-spinner"></div>
+            <span class="terminal-loading-text">连接终端中...</span>
+          </div>
           <!-- 锁定提示遮罩 - 拦截触摸事件，手动处理滚动 -->
           <div v-if="inputLocked" class="terminal-overlay"
             @touchstart.passive="onOverlayTouchStart"
@@ -128,6 +133,7 @@ const route = useRoute()
 const loading = ref(true)
 const error = ref('')
 const task = ref(null)
+const terminalConnecting = ref(false)
 const terminalContainer = ref(null)
 const inputLocked = ref(false)
 
@@ -190,15 +196,36 @@ function initTerminal() {
 
   // 初始化终端
   terminal = new Terminal({
-    cursorBlink: true,
+    cursorBlink: false,
     cursorStyle: 'block',
     fontSize: fontSize,
     fontFamily: 'Consolas, "Courier New", monospace',
+    lineHeight: 1.2,  // 明确设置行高，确保光标定位准确
+    letterSpacing: 0,
     theme: {
       background: '#1e1e1e',
       foreground: '#d4d4d4',
       cursor: '#ffffff',
-      selectionBackground: '#264f78'
+      cursorAccent: '#000000',
+      selectionBackground: '#264f78',
+      // ANSI 16色 - VS Code One Dark Pro 风格
+      black: '#000000',
+      red: '#e06c75',
+      green: '#98c379',
+      yellow: '#e5c07b',
+      blue: '#61afef',
+      magenta: '#c678dd',
+      cyan: '#56b6c2',
+      white: '#abb2bf',
+      // 高亮16色
+      brightBlack: '#5c6370',
+      brightRed: '#e06c75',
+      brightGreen: '#98c379',
+      brightYellow: '#e5c07b',
+      brightBlue: '#61afef',
+      brightMagenta: '#c678dd',
+      brightCyan: '#56b6c2',
+      brightWhite: '#ffffff'
     },
     allowTransparency: false,
     scrollback: 5000,
@@ -210,14 +237,25 @@ function initTerminal() {
   terminal.open(terminalContainer.value)
 
   // 延迟调用 fit，确保元素有尺寸
+  // 使用双重 requestAnimationFrame 确保 DOM 完全渲染
   requestAnimationFrame(() => {
-    try {
-      if (fitAddon && terminal) {
-        fitAddon.fit()
+    requestAnimationFrame(() => {
+      try {
+        if (fitAddon && terminal) {
+          fitAddon.fit()
+          // 如果 WebSocket 已连接，立即同步尺寸
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'resize',
+              cols: terminal.cols,
+              rows: terminal.rows
+            }))
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to fit terminal:', e)
       }
-    } catch (e) {
-      console.warn('Failed to fit terminal:', e)
-    }
+    })
   })
 
   terminal.focus()
@@ -242,12 +280,30 @@ function connectWebSocket() {
   const wsUrl = `ws://${host}:${port}/ws/tasks/${route.params.id}?token=${token}`
 
   console.log('Connecting to WebSocket:', wsUrl)
+  terminalConnecting.value = true
 
   try {
     ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
       console.log('WebSocket connected')
+      terminalConnecting.value = false
+      // 连接成功后立即同步终端尺寸到后端
+      if (fitAddon && terminal) {
+        try {
+          fitAddon.fit()
+          const cols = terminal.cols
+          const rows = terminal.rows
+          ws.send(JSON.stringify({
+            type: 'resize',
+            cols: cols,
+            rows: rows
+          }))
+          console.log('Terminal size synced:', cols, 'x', rows)
+        } catch (e) {
+          console.warn('Failed to sync terminal size:', e)
+        }
+      }
     }
 
     ws.onmessage = (event) => {
@@ -270,6 +326,7 @@ function connectWebSocket() {
 
     ws.onclose = (event) => {
       console.log('WebSocket disconnected:', event.code, event.reason)
+      terminalConnecting.value = false
       // 尝试重连
       setTimeout(() => {
         if (task.value?.status === 'running') {
@@ -280,6 +337,7 @@ function connectWebSocket() {
 
     ws.onerror = (err) => {
       console.error('WebSocket error:', err)
+      terminalConnecting.value = false
     }
   } catch (e) {
     console.error('Failed to create WebSocket:', e)
@@ -290,6 +348,16 @@ function handleResize() {
   try {
     if (fitAddon && terminal) {
       fitAddon.fit()
+      // 同步尺寸到后端 tmux
+      const cols = terminal.cols
+      const rows = terminal.rows
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'resize',
+          cols: cols,
+          rows: rows
+        }))
+      }
     }
   } catch (e) {
     console.warn('Failed to fit terminal on resize:', e)
@@ -551,13 +619,50 @@ function openFileBrowser() {
   color: rgba(255, 255, 255, 0.5);
 }
 
+/* 终端连接加载动画 */
+.terminal-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(30, 30, 30, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: var(--border-radius);
+  z-index: 20;
+}
+
+.terminal-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #333;
+  border-top-color: var(--primary-color, #61afef);
+  border-radius: 50%;
+  animation: terminal-spin 0.8s linear infinite;
+}
+
+@keyframes terminal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.terminal-loading-text {
+  color: var(--text-secondary, #abb2bf);
+  font-size: 0.85rem;
+}
+
 /* 终端容器 - 使用 xterm.js */
 .terminal-container {
   flex: 1;
   min-height: 100px;
   background: #1e1e1e;
   border-radius: var(--border-radius);
-  padding: 4px;
+  padding: 0;  /* 移除 padding，让 xterm 自己管理 */
   margin-bottom: 8px;
   overflow: hidden;
   touch-action: pan-y;
@@ -566,7 +671,24 @@ function openFileBrowser() {
 
 /* xterm.js 样式调整 */
 .terminal-container :deep(.xterm) {
+  padding: 8px;  /* 在 xterm 内部添加 padding */
+  box-sizing: border-box;
+}
+
+.terminal-container :deep(.xterm-screen) {
   padding: 0;
+}
+
+/* 隐藏 xterm.js 光标，使用终端内容自带的光标 */
+.terminal-container :deep(.xterm-cursor) {
+  position: absolute !important;
+  left: -9999px !important;
+  visibility: hidden !important;
+}
+
+/* 隐藏只包含光标的空行 */
+.terminal-container :deep(.xterm-rows > div:has(.xterm-cursor:only-child)) {
+  display: none !important;
 }
 
 .terminal-container :deep(.xterm-viewport) {
