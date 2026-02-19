@@ -1,6 +1,6 @@
 # Claude Remote
 
-Claude Code 远程任务管理工具，通过浏览器远程管理和控制 Claude Code 终端会话。
+基于 Claude Code + GLM5 实现的远程任务管理工具，通过浏览器远程管理和控制 Claude Code 终端会话。
 
 ![Vue.js](https://img.shields.io/badge/Vue.js-3.x-4FC08D?logo=vue.js)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688?logo=fastapi)
