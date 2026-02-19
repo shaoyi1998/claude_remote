@@ -154,6 +154,28 @@ export function deleteShortcut(category, id) {
   return shortcuts
 }
 
+// 移动配置项顺序（direction: 'up' 或 'down'）
+export function moveShortcut(category, id, direction) {
+  const shortcuts = getShortcuts()
+  const list = shortcuts[category]
+  const index = list.findIndex(item => item.id === id)
+
+  if (index === -1) return shortcuts
+
+  const newIndex = direction === 'up' ? index - 1 : index + 1
+
+  // 边界检查
+  if (newIndex < 0 || newIndex >= list.length) return shortcuts
+
+  // 交换位置
+  const temp = list[index]
+  list[index] = list[newIndex]
+  list[newIndex] = temp
+
+  saveShortcuts(shortcuts)
+  return shortcuts
+}
+
 /**
  * 将新数据结构转换为 tmux 格式
  * @param {Object} shortcut - 快捷键对象 { modifiers: ['C', 'S'], key: 'c' }

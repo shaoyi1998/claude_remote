@@ -94,9 +94,13 @@
             <h4>快捷命令</h4>
             <button class="btn btn-sm btn-primary" @click="addCommand">+ 添加</button>
           </div>
-          <p class="settings-hint">点击编辑，可自定义命令和显示名称</p>
+          <p class="settings-hint">点击编辑，可自定义命令和显示名称。<span class="highlight">前5个启用的命令会在任务详情页显示。</span></p>
           <div class="shortcut-list">
-            <div v-for="item in shortcuts.commands" :key="item.id" class="shortcut-item editable">
+            <div v-for="(item, index) in shortcuts.commands" :key="item.id" class="shortcut-item editable" :class="{ 'item-highlight': item.enabled && index < 5 }">
+              <div class="sort-buttons">
+                <button class="sort-btn" @click="moveItem('commands', item.id, 'up')" :disabled="index === 0" title="上移">↑</button>
+                <button class="sort-btn" @click="moveItem('commands', item.id, 'down')" :disabled="index === shortcuts.commands.length - 1" title="下移">↓</button>
+              </div>
               <label class="toggle-wrap">
                 <input type="checkbox" v-model="item.enabled" @change="saveShortcutsData" />
                 <span class="toggle-slider"></span>
@@ -124,9 +128,13 @@
             <h4>自定义快捷键</h4>
             <button class="btn btn-sm btn-primary" @click="addNewShortcut">+ 添加</button>
           </div>
-          <p class="settings-hint">可设置 Ctrl/Shift/Alt 组合键或功能键</p>
+          <p class="settings-hint">可设置 Ctrl/Shift/Alt 组合键或功能键。<span class="highlight">前5个启用的快捷键会在任务详情页显示。</span></p>
           <div class="shortcut-list">
-            <div v-for="item in shortcuts.shortcuts" :key="item.id" class="shortcut-item editable">
+            <div v-for="(item, index) in shortcuts.shortcuts" :key="item.id" class="shortcut-item editable" :class="{ 'item-highlight': item.enabled && index < 5 }">
+              <div class="sort-buttons">
+                <button class="sort-btn" @click="moveItem('shortcuts', item.id, 'up')" :disabled="index === 0" title="上移">↑</button>
+                <button class="sort-btn" @click="moveItem('shortcuts', item.id, 'down')" :disabled="index === shortcuts.shortcuts.length - 1" title="下移">↓</button>
+              </div>
               <label class="toggle-wrap">
                 <input type="checkbox" v-model="item.enabled" @change="saveShortcutsData" />
                 <span class="toggle-slider"></span>
@@ -191,6 +199,7 @@ import {
   resetShortcuts,
   addShortcut,
   deleteShortcut,
+  moveShortcut,
   availableModifiers,
   availableKeyOptions,
   getKeyDisplayName,
@@ -379,6 +388,10 @@ function deleteItem(category, id) {
   if (confirm('确定要删除此项吗？')) {
     shortcuts.value = deleteShortcut(category, id)
   }
+}
+
+function moveItem(category, id, direction) {
+  shortcuts.value = moveShortcut(category, id, direction)
 }
 
 function resetAllShortcuts() {
@@ -774,5 +787,50 @@ function getShortcutDisplay(item) {
 
 .toggle-wrap input:checked + .toggle-slider:before {
   transform: translateX(18px);
+}
+
+/* 排序按钮 */
+.sort-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.sort-btn {
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border-color, #444);
+  border-radius: 4px;
+  background: var(--bg-secondary, #2a2a3e);
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.sort-btn:hover:not(:disabled) {
+  background: var(--primary-color);
+  color: #fff;
+  border-color: var(--primary-color);
+}
+
+.sort-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* 高亮显示前5项 */
+.item-highlight {
+  border-left: 3px solid var(--primary-color);
+}
+
+.settings-hint .highlight {
+  color: var(--primary-color);
+  font-weight: 500;
 }
 </style>
