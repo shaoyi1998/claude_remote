@@ -95,6 +95,18 @@ SHORTCUT_KEYS = {
 # 有效的 tmux 修饰键前缀
 VALID_MODIFIERS = {'C', 'S', 'M'}
 
+# 需要转换为原始转义序列的特殊按键
+# tmux send-keys 对某些 Shift 组合键支持不好，需要使用原始转义序列
+SPECIAL_KEY_TO_RAW = {
+    'S-Tab': '\x1b[Z',      # Shift+Tab
+    'S-Up': '\x1b[1;2A',    # Shift+Up
+    'S-Down': '\x1b[1;2B',  # Shift+Down
+    'S-Left': '\x1b[1;2D',  # Shift+Left
+    'S-Right': '\x1b[1;2C', # Shift+Right
+    'S-Home': '\x1b[1;2H',  # Shift+Home
+    'S-End': '\x1b[1;2F',   # Shift+End
+}
+
 # 有效的按键名称
 VALID_KEYS = {
     # 字母

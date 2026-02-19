@@ -10,7 +10,7 @@ import os
 
 from services.database import get_db
 from services.auth import get_current_active_user
-from services.terminal_service import SHORTCUT_KEYS, validate_tmux_key
+from services.terminal_service import SHORTCUT_KEYS, validate_tmux_key, SPECIAL_KEY_TO_RAW
 from models.user import User
 from models.task import Task
 from platform_utils import get_terminal_service, is_root
@@ -26,6 +26,7 @@ class TaskCreate(BaseModel):
 
 
 class TaskUpdate(BaseModel):
+    name: Optional[str] = None
     skip_permissions: Optional[bool] = None
     teammate_mode: Optional[bool] = None
 
@@ -169,6 +170,8 @@ async def update_task(
         raise HTTPException(status_code=404, detail="任务不存在")
 
     # 更新设置
+    if task_data.name is not None:
+        task.name = task_data.name
     if task_data.skip_permissions is not None:
         task.skip_permissions = task_data.skip_permissions
     if task_data.teammate_mode is not None:
@@ -367,6 +370,9 @@ async def send_shortcut(
         if shortcut.startswith("RAW:"):
             raw_data = shortcut[4:]
             success = terminal.send_raw(task.tmux_session, raw_data)
+        # 检查是否需要转换为原始转义序列（某些 Shift 组合键 tmux 支持不好）
+        elif shortcut in SPECIAL_KEY_TO_RAW:
+            success = terminal.send_raw(task.tmux_session, SPECIAL_KEY_TO_RAW[shortcut])
         else:
             success = terminal.send_keys(task.tmux_session, shortcut)
     else:
