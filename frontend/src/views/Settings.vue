@@ -195,7 +195,7 @@ import { useRouter } from 'vue-router'
 import { saveServerConfig, getServerAddress, updateApiBaseURL } from '../api'
 import {
   getShortcuts,
-  saveShortcuts as saveShortcutsToStorage,
+  saveShortcutsLocal,
   resetShortcuts,
   addShortcut,
   deleteShortcut,
@@ -205,6 +205,7 @@ import {
   getKeyDisplayName,
   keyToTmux,
   tmuxToKey,
+  syncToServer,
 } from '../stores/shortcuts'
 import { isCapacitorApp } from '../utils/platform'
 
@@ -305,8 +306,10 @@ function resetServerConfig() {
 }
 
 // 快捷键相关方法
-function saveShortcutsData() {
-  saveShortcutsToStorage(shortcuts.value)
+async function saveShortcutsData() {
+  saveShortcutsLocal(shortcuts.value)
+  // 异步同步到服务器
+  syncToServer(shortcuts.value)
 }
 
 function startEdit(category, id, label, command) {
@@ -364,16 +367,16 @@ function cancelEdit() {
   editDesc.value = ''
 }
 
-function addCommand() {
+async function addCommand() {
   const newItem = {
     label: '新命令',
     command: '/new-command',
     enabled: true
   }
-  shortcuts.value = addShortcut('commands', newItem)
+  shortcuts.value = await addShortcut('commands', newItem)
 }
 
-function addNewShortcut() {
+async function addNewShortcut() {
   const newItem = {
     label: '新快捷键',
     modifiers: ['C'],
@@ -381,22 +384,24 @@ function addNewShortcut() {
     description: '',
     enabled: true
   }
-  shortcuts.value = addShortcut('shortcuts', newItem)
+  shortcuts.value = await addShortcut('shortcuts', newItem)
 }
 
-function deleteItem(category, id) {
+async function deleteItem(category, id) {
   if (confirm('确定要删除此项吗？')) {
-    shortcuts.value = deleteShortcut(category, id)
+    shortcuts.value = await deleteShortcut(category, id)
   }
 }
 
-function moveItem(category, id, direction) {
-  shortcuts.value = moveShortcut(category, id, direction)
+async function moveItem(category, id, direction) {
+  shortcuts.value = await moveShortcut(category, id, direction)
 }
 
-function resetAllShortcuts() {
+async function resetAllShortcuts() {
   if (confirm('确定要重置所有快捷键为默认配置吗？')) {
     shortcuts.value = resetShortcuts()
+    // 同步到服务器
+    await syncToServer(shortcuts.value)
     alert('已重置为默认配置！')
   }
 }
