@@ -3,10 +3,11 @@
 支持目录浏览、文件读取、文件写入
 """
 from fastapi import APIRouter, HTTPException, Query, Depends
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel
 import os
 import mimetypes
+import base64
 from pathlib import Path
 from typing import Optional, List
 
@@ -395,3 +396,98 @@ async def create_directory(request: PathRequest):
         raise HTTPException(status_code=403, detail="无权限创建目录")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"创建目录失败: {str(e)}")
+
+
+@router.delete("/delete")
+async def delete_file_or_dir(path: str = Query(..., description="要删除的文件或目录路径")):
+    """
+    删除文件或目录
+
+    - **path**: 文件或目录路径
+    """
+    # 展开 ~ 为用户目录
+    path = os.path.expanduser(path)
+    # 规范化路径
+    path = os.path.normpath(path)
+    if not os.path.isabs(path):
+        path = "/" + path
+
+    # 安全检查
+    if not is_path_allowed(path):
+        raise HTTPException(status_code=403, detail="路径访问被拒绝")
+
+    # 检查路径是否存在
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="文件或目录不存在")
+
+    try:
+        if os.path.isfile(path):
+            os.remove(path)
+        elif os.path.isdir(path):
+            import shutil
+            shutil.rmtree(path)
+
+        return {"success": True, "path": path}
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="无权限删除")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
+
+
+@router.get("/binary")
+async def read_binary_file(path: str = Query(..., description="要读取的文件路径")):
+    """
+    读取二进制文件（如图片），返回 base64 编码
+
+    - **path**: 文件路径
+    """
+    # 展开 ~ 为用户目录
+    path = os.path.expanduser(path)
+    # 规范化路径
+    path = os.path.normpath(path)
+    if not os.path.isabs(path):
+        path = "/" + path
+
+    # 安全检查
+    if not is_path_allowed(path):
+        raise HTTPException(status_code=403, detail="路径访问被拒绝")
+
+    # 检查文件是否存在
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    # 检查是否为文件
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=400, detail="不是有效的文件")
+
+    # 检查文件大小（限制大文件）
+    file_size = os.path.getsize(path)
+    max_size = 10 * 1024 * 1024  # 10MB
+    if file_size > max_size:
+        raise HTTPException(
+            status_code=413,
+            detail=f"文件过大（{file_size / 1024 / 1024:.2f}MB），超过限制（10MB）"
+        )
+
+    try:
+        with open(path, 'rb') as f:
+            content = f.read()
+
+        # 获取 MIME 类型
+        mime_type, _ = mimetypes.guess_type(path)
+        if not mime_type:
+            mime_type = 'application/octet-stream'
+
+        # 返回 base64 编码
+        base64_content = base64.b64encode(content).decode('utf-8')
+
+        return {
+            "path": path,
+            "mime_type": mime_type,
+            "size": file_size,
+            "base64": base64_content
+        }
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="无权限读取该文件")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取文件失败: {str(e)}")

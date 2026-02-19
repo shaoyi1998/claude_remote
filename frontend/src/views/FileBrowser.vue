@@ -71,29 +71,48 @@
         <span class="preview-title">{{ previewFile.name }}</span>
         <div class="preview-actions">
           <button
-            v-if="!isEditMode"
+            v-if="!isEditMode && !isImageFile"
             class="btn btn-sm btn-primary"
             @click="enterEditMode"
           >
             编辑
           </button>
-          <template v-else>
+          <template v-else-if="isEditMode">
             <button class="btn btn-sm btn-primary" @click="saveFile" :disabled="saving">
               {{ saving ? '保存中...' : '保存' }}
             </button>
             <button class="btn btn-sm btn-secondary" @click="cancelEdit">
               取消
             </button>
+            <button
+              class="btn btn-sm"
+              :class="isLocked ? 'btn-warning' : 'btn-secondary'"
+              @click="toggleLock"
+              :title="isLocked ? '解锁编辑' : '锁定编辑'"
+            >
+              {{ isLocked ? '🔒' : '🔓' }}
+            </button>
           </template>
-          <button class="btn btn-sm btn-secondary" @click="copyContent">复制</button>
+          <button class="btn btn-sm btn-secondary" @click="copyPath" title="复制路径">路径</button>
+          <button v-if="!isEditMode" class="btn btn-sm btn-secondary" @click="copyContent">复制</button>
+          <button v-if="!isEditMode" class="btn btn-sm btn-danger" @click="deleteFile">删除</button>
           <button class="btn btn-sm btn-secondary" @click="closePreview">关闭</button>
         </div>
       </div>
       <div v-if="previewLoading" class="preview-loading">
         <span class="spinner"></span>
       </div>
+      <!-- 图片预览 -->
+      <div v-else-if="isImageFile && imageData" class="image-preview">
+        <img :src="imageData" :alt="previewFile.name" />
+      </div>
       <!-- 编辑模式：Monaco Editor -->
-      <div v-else-if="isEditMode" ref="editorContainer" class="editor-container"></div>
+      <div v-else-if="isEditMode" class="editor-wrapper" :class="{ 'editor-locked': isLocked }">
+        <div v-if="isLocked" class="lock-overlay" @click="showUnlockHint">
+          <span>🔒 已锁定 - 点击解锁</span>
+        </div>
+        <div ref="editorContainer" class="editor-container"></div>
+      </div>
       <!-- 预览模式：高亮显示 -->
       <pre v-else class="preview-content"><code :class="previewLanguage" v-html="highlightedContent"></code></pre>
     </div>
@@ -190,8 +209,10 @@ const workDir = ref('')
 
 // 编辑模式相关
 const isEditMode = ref(false)
+const isLocked = ref(false)
 const editorContainer = ref(null)
 const saving = ref(false)
+const imageData = ref(null)
 let editor = null
 
 // 新建文件/文件夹相关
@@ -237,6 +258,13 @@ const previewLanguage = computed(() => {
     '.sql': 'sql'
   }
   return langMap[ext] || ''
+})
+
+// 判断是否为图片文件
+const isImageFile = computed(() => {
+  if (!previewFile.value) return false
+  const ext = previewFile.value.extension?.toLowerCase() || ''
+  return ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico'].includes(ext)
 })
 
 // 获取Monaco语言ID
@@ -367,25 +395,48 @@ function openItem(item) {
 async function openPreview(item) {
   previewFile.value = item
   previewContent.value = ''
+  imageData.value = null
   previewLoading.value = true
   isEditMode.value = false
+  isLocked.value = false
 
-  try {
-    const res = await api.get('/files/read', {
-      params: { path: item.path }
-    })
-    previewContent.value = res.data.content
-  } catch (e) {
-    previewContent.value = `无法读取文件: ${e.response?.data?.detail || e.message}`
-  } finally {
-    previewLoading.value = false
+  // 判断是否为图片
+  const ext = item.extension?.toLowerCase() || ''
+  const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico']
+
+  if (imageExts.includes(ext)) {
+    // 读取图片
+    try {
+      const res = await api.get('/files/binary', {
+        params: { path: item.path }
+      })
+      imageData.value = `data:${res.data.mime_type};base64,${res.data.base64}`
+    } catch (e) {
+      previewContent.value = `无法读取图片: ${e.response?.data?.detail || e.message}`
+    } finally {
+      previewLoading.value = false
+    }
+  } else {
+    // 读取文本文件
+    try {
+      const res = await api.get('/files/read', {
+        params: { path: item.path }
+      })
+      previewContent.value = res.data.content
+    } catch (e) {
+      previewContent.value = `无法读取文件: ${e.response?.data?.detail || e.message}`
+    } finally {
+      previewLoading.value = false
+    }
   }
 }
 
 function closePreview() {
   previewFile.value = null
   previewContent.value = ''
+  imageData.value = null
   isEditMode.value = false
+  isLocked.value = false
   // 销毁编辑器
   if (editor) {
     editor.dispose()
@@ -404,9 +455,52 @@ async function copyContent() {
   }
 }
 
+async function copyPath() {
+  if (previewFile.value) {
+    try {
+      await navigator.clipboard.writeText(previewFile.value.path)
+      alert('路径已复制到剪贴板')
+    } catch (e) {
+      alert('复制失败')
+    }
+  }
+}
+
+async function deleteFile() {
+  if (!previewFile.value) return
+
+  const confirmed = confirm(`确定要删除 "${previewFile.value.name}" 吗？此操作不可恢复！`)
+  if (!confirmed) return
+
+  try {
+    await api.delete('/files/delete', {
+      params: { path: previewFile.value.path }
+    })
+    alert('删除成功')
+    closePreview()
+    loadDirectory(currentPath.value)
+  } catch (e) {
+    alert('删除失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+function toggleLock() {
+  isLocked.value = !isLocked.value
+  if (editor) {
+    editor.updateOptions({ readOnly: isLocked.value })
+  }
+}
+
+function showUnlockHint() {
+  if (confirm('是否解锁编辑器？')) {
+    toggleLock()
+  }
+}
+
 // 进入编辑模式
 async function enterEditMode() {
   isEditMode.value = true
+  isLocked.value = true  // 默认锁定，防止手机输入法弹出
   await nextTick()
 
   if (editorContainer.value && previewFile.value) {
@@ -428,7 +522,8 @@ async function enterEditMode() {
       tabSize: 2,
       wordWrap: 'on',
       lineNumbers: 'on',
-      renderLineHighlight: 'line'
+      renderLineHighlight: 'line',
+      readOnly: true  // 默认只读
     })
   }
 }
@@ -436,6 +531,7 @@ async function enterEditMode() {
 // 取消编辑
 function cancelEdit() {
   isEditMode.value = false
+  isLocked.value = false
   if (editor) {
     editor.dispose()
     editor = null
@@ -767,6 +863,70 @@ function formatTime(timestamp) {
 .editor-container {
   flex: 1;
   overflow: hidden;
+}
+
+/* 编辑器包装器（锁定功能） */
+.editor-wrapper {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.lock-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  cursor: pointer;
+}
+
+.lock-overlay span {
+  background: var(--bg-secondary);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+/* 图片预览 */
+.image-preview {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  padding: 16px;
+}
+
+.image-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* 按钮样式 */
+.btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+}
+
+.btn-warning {
+  background: #ffc107;
+  color: #212529;
+}
+
+.btn-warning:hover {
+  background: #e0a800;
 }
 
 /* 对话框 */
