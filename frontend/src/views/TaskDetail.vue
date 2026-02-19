@@ -1,13 +1,5 @@
 <template>
   <div class="page">
-    <div class="header">
-      <button class="btn btn-sm btn-secondary" @click="goBack">返回</button>
-      <h1>{{ task?.name || '任务详情' }}</h1>
-      <button class="btn btn-sm" :class="inputLocked ? 'btn-danger' : 'btn-secondary'" @click="toggleLock">
-        {{ inputLocked ? '解锁' : '锁定' }}
-      </button>
-    </div>
-
     <div v-if="error" class="error-message">{{ error }}</div>
 
     <div v-if="loading" class="loading">
@@ -15,12 +7,42 @@
     </div>
 
     <template v-if="task">
-      <!-- 精简状态栏 -->
-      <div class="status-bar">
-        <span :class="['status-badge', 'status-' + task.status]">
-          {{ statusText(task.status) }}
-        </span>
-        <span class="status-info">{{ task.work_dir }}</span>
+      <!-- 紧凑头部 - 合并原有头部、状态栏和底部栏 -->
+      <div class="compact-header">
+        <!-- 返回按钮 -->
+        <button class="header-btn" @click="goBack" title="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+
+        <!-- 任务名称 + 状态指示点 -->
+        <h1 class="header-title">
+          {{ task.name || '任务详情' }}
+          <span :class="['status-dot', 'status-' + task.status]" :title="statusText(task.status)"></span>
+        </h1>
+
+        <!-- 工作目录 -->
+        <span class="header-path" :title="task.work_dir">{{ task.work_dir }}</span>
+
+        <!-- 文件管理按钮 -->
+        <button class="header-btn" @click="openFileBrowser" title="文件管理">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+        </button>
+
+        <!-- 锁定/解锁按钮 -->
+        <button class="header-btn" :class="{ locked: inputLocked }" @click="toggleLock" :title="inputLocked ? '解锁' : '锁定'">
+          <svg v-if="inputLocked" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+          </svg>
+        </button>
       </div>
 
       <!-- 主内容区 - 终端 + 右侧快捷栏 -->
@@ -90,11 +112,6 @@
           <!-- Enter 按钮 - 始终显示在底部 -->
           <button class="side-btn side-btn-enter" @click="sendShortcut('enter')">↵</button>
         </div>
-      </div>
-
-      <!-- 底部栏 - 只保留文件管理 -->
-      <div class="bottom-bar">
-        <button class="bar-btn" @click="openFileBrowser">文件管理</button>
       </div>
     </template>
   </div>
@@ -267,10 +284,24 @@ function initTerminal() {
 }
 
 function connectWebSocket() {
+  // 检查 task_id 是否有效
+  const taskId = route.params.id
+  if (!taskId || taskId === 'undefined') {
+    console.error('Invalid task_id:', taskId)
+    error.value = '任务ID无效，请返回重试'
+    return
+  }
+
   // 使用配置的服务器地址连接后端
   const token = localStorage.getItem('token')
+  if (!token) {
+    error.value = '未登录，请重新登录'
+    router.push('/login')
+    return
+  }
+
   const { host, port } = getServerAddress()
-  const wsUrl = `ws://${host}:${port}/ws/tasks/${route.params.id}?token=${token}`
+  const wsUrl = `ws://${host}:${port}/ws/tasks/${taskId}?token=${token}`
 
   console.log('Connecting to WebSocket:', wsUrl)
   terminalConnecting.value = true
@@ -531,39 +562,91 @@ function openFileBrowser() {
   bottom: 0;
 }
 
-.header {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 8px;
-  flex-shrink: 0;
-}
-
-.header h1 {
-  text-align: center;
-  font-size: 1rem;
-}
-
-/* 精简状态栏 */
-.status-bar {
+/* 紧凑头部 - 合并原有头部、状态栏和底部栏 */
+.compact-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 6px 8px;
   background: var(--bg-secondary);
   border-radius: var(--border-radius);
   margin-bottom: 8px;
   flex-shrink: 0;
 }
 
-.status-info {
-  font-size: 0.8rem;
+.header-btn {
+  width: 32px;
+  height: 32px;
+  padding: 4px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-card);
   color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+
+.header-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.header-btn:active {
+  background: var(--primary-color);
+  color: #fff;
+}
+
+.header-btn.locked {
+  background: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+}
+
+.header-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+/* 状态指示点 - 红绿灯效果 */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.status-running {
+  background: #28a745;
+  box-shadow: 0 0 6px #28a745;
+}
+
+.status-dot.status-stopped {
+  background: #dc3545;
+  box-shadow: 0 0 6px #dc3545;
+}
+
+.status-dot.status-error {
+  background: #ffc107;
+  box-shadow: 0 0 6px #ffc107;
+}
+
+.header-path {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
   flex: 1;
+  min-width: 0;
 }
 
 /* 主内容区 - 终端 + 右侧快捷栏 */
@@ -806,36 +889,6 @@ function openFileBrowser() {
   color: #fff;
 }
 
-/* 底部栏 */
-.bottom-bar {
-  display: flex;
-  gap: 8px;
-  padding: 8px;
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border-color, #333);
-  flex-shrink: 0;
-  min-height: 52px;
-}
-
-.bar-btn {
-  flex: 1;
-  padding: 12px 8px;
-  border-radius: 8px;
-  background: var(--bg-card);
-  color: var(--text-color);
-  font-size: 0.9rem;
-  border: none;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-touch-callout: none;
-  user-select: none;
-}
-
-.bar-btn:active {
-  background: var(--primary-color);
-  color: #fff;
-}
-
 /* 横屏布局优化 */
 @media (orientation: landscape) {
   .right-sidebar {
@@ -846,10 +899,6 @@ function openFileBrowser() {
   .side-btn {
     padding: 12px 4px;
     font-size: 0.8rem;
-  }
-
-  .bottom-bar {
-    display: none;
   }
 }
 </style>
