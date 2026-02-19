@@ -123,7 +123,7 @@ cd claude_remote
 cd backend
 pip install -r requirements.txt
 cp .env.example .env
-# 编辑 .env 修改 SECRET_KEY
+# SECRET_KEY 默认自动生成，无需手动配置
 
 # 安装前端依赖并构建
 cd ../frontend
@@ -444,7 +444,8 @@ chmod +x cloudflared
 
 ```ini
 # backend/.env
-SECRET_KEY=请使用32位以上随机字符串
+# SECRET_KEY 默认自动生成，如需固定密钥请取消注释
+# SECRET_KEY=your-random-secret-key-at-least-32-chars
 CORS_ORIGINS=https://your-domain.com
 ACCESS_TOKEN_EXPIRE_MINUTES=10080
 ```
@@ -491,10 +492,10 @@ claude_remote/
 ## 安全提醒
 
 1. **修改默认密码** - 首次登录后立即修改（默认: admin / admin123）
-2. **设置强密钥** - 生产环境 SECRET_KEY 使用随机字符串
-3. **配置 CORS** - 限制允许的来源域名
-4. **使用 HTTPS** - 生产环境必须使用 SSL
-5. **定期备份** - 备份 `claude_remote.db` 数据库文件
+2. **配置 CORS** - 限制允许的来源域名
+3. **使用 HTTPS** - 生产环境必须使用 SSL
+4. **定期备份** - 备份 `claude_remote.db` 数据库文件
+5. **登录保护** - 内置防爆破机制，连续 5 次失败锁定 IP 24 小时
 
 ## License
 

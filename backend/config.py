@@ -1,6 +1,7 @@
 """
 应用配置
 """
+import os
 from pydantic_settings import BaseSettings
 from typing import Optional, List
 
@@ -11,7 +12,7 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # JWT 配置
-    secret_key: str = "your-secret-key-change-in-production"
+    secret_key: str = os.urandom(32).hex()
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7天
 

@@ -141,11 +141,15 @@ ws://host:port/ws/tasks/{task_id}?token=<jwt_token>
 ### 环境变量
 
 ```ini
-# JWT 密钥（生产环境必须修改）
-SECRET_KEY=your-secret-key
+# JWT 密钥（默认自动生成，如需固定密钥请设置）
+# SECRET_KEY=your-secret-key
 
 # Token 过期时间（分钟）
 ACCESS_TOKEN_EXPIRE_MINUTES=10080
+
+# 登录安全配置
+LOGIN_MAX_ATTEMPTS=5
+LOGIN_LOCKOUT_MINUTES=1440
 
 # 数据库路径
 DATABASE_URL=sqlite:///./claude_remote.db
@@ -182,8 +186,9 @@ CLAUDE_COMMAND=claude
 
 ## 安全注意事项
 
-1. **生产环境必须修改 SECRET_KEY**
+1. **SECRET_KEY 默认自动生成** - 每次重启会生成新密钥，如需保持会话有效请手动设置
 2. 默认管理员密码登录后立即修改
 3. 生产环境设置 CORS_ORIGINS 为具体域名
 4. 建议使用 HTTPS
 5. 数据库文件不要提交到版本控制
+6. 内置登录防爆破保护，连续 5 次失败锁定 IP 24 小时
