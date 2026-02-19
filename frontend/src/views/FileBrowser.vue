@@ -84,14 +84,6 @@
             <button class="btn btn-sm btn-secondary" @click="cancelEdit">
               取消
             </button>
-            <button
-              class="btn btn-sm"
-              :class="isLocked ? 'btn-warning' : 'btn-secondary'"
-              @click="toggleLock"
-              :title="isLocked ? '解锁编辑' : '锁定编辑'"
-            >
-              {{ isLocked ? '🔒' : '🔓' }}
-            </button>
           </template>
           <button class="btn btn-sm btn-secondary" @click="copyPath" title="复制路径">路径</button>
           <button v-if="!isEditMode" class="btn btn-sm btn-secondary" @click="copyContent">复制</button>
@@ -107,12 +99,7 @@
         <img :src="imageData" :alt="previewFile.name" />
       </div>
       <!-- 编辑模式：Monaco Editor -->
-      <div v-else-if="isEditMode" class="editor-wrapper" :class="{ 'editor-locked': isLocked }">
-        <div v-if="isLocked" class="lock-overlay" @click="showUnlockHint">
-          <span>🔒 已锁定 - 点击解锁</span>
-        </div>
-        <div ref="editorContainer" class="editor-container"></div>
-      </div>
+      <div v-else-if="isEditMode" ref="editorContainer" class="editor-container"></div>
       <!-- 预览模式：高亮显示 -->
       <pre v-else class="preview-content"><code :class="previewLanguage" v-html="highlightedContent"></code></pre>
     </div>
@@ -209,7 +196,6 @@ const workDir = ref('')
 
 // 编辑模式相关
 const isEditMode = ref(false)
-const isLocked = ref(false)
 const editorContainer = ref(null)
 const saving = ref(false)
 const imageData = ref(null)
@@ -398,7 +384,6 @@ async function openPreview(item) {
   imageData.value = null
   previewLoading.value = true
   isEditMode.value = false
-  isLocked.value = false
 
   // 判断是否为图片
   const ext = item.extension?.toLowerCase() || ''
@@ -436,7 +421,6 @@ function closePreview() {
   previewContent.value = ''
   imageData.value = null
   isEditMode.value = false
-  isLocked.value = false
   // 销毁编辑器
   if (editor) {
     editor.dispose()
@@ -447,7 +431,7 @@ function closePreview() {
 async function copyContent() {
   if (previewContent.value) {
     try {
-      await navigator.clipboard.writeText(previewContent.value)
+      await copyToClipboard(previewContent.value)
       alert('已复制到剪贴板')
     } catch (e) {
       alert('复制失败')
@@ -458,11 +442,29 @@ async function copyContent() {
 async function copyPath() {
   if (previewFile.value) {
     try {
-      await navigator.clipboard.writeText(previewFile.value.path)
+      await copyToClipboard(previewFile.value.path)
       alert('路径已复制到剪贴板')
     } catch (e) {
       alert('复制失败')
     }
+  }
+}
+
+// 兼容 HTTP/HTTPS 的复制方法
+async function copyToClipboard(text) {
+  // 优先使用 Clipboard API
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text)
+  } else {
+    // 降级使用 execCommand
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
   }
 }
 
@@ -484,23 +486,9 @@ async function deleteFile() {
   }
 }
 
-function toggleLock() {
-  isLocked.value = !isLocked.value
-  if (editor) {
-    editor.updateOptions({ readOnly: isLocked.value })
-  }
-}
-
-function showUnlockHint() {
-  if (confirm('是否解锁编辑器？')) {
-    toggleLock()
-  }
-}
-
 // 进入编辑模式
 async function enterEditMode() {
   isEditMode.value = true
-  isLocked.value = true  // 默认锁定，防止手机输入法弹出
   await nextTick()
 
   if (editorContainer.value && previewFile.value) {
@@ -522,8 +510,7 @@ async function enterEditMode() {
       tabSize: 2,
       wordWrap: 'on',
       lineNumbers: 'on',
-      renderLineHighlight: 'line',
-      readOnly: true  // 默认只读
+      renderLineHighlight: 'line'
     })
   }
 }
@@ -531,7 +518,6 @@ async function enterEditMode() {
 // 取消编辑
 function cancelEdit() {
   isEditMode.value = false
-  isLocked.value = false
   if (editor) {
     editor.dispose()
     editor = null
@@ -865,34 +851,6 @@ function formatTime(timestamp) {
   overflow: hidden;
 }
 
-/* 编辑器包装器（锁定功能） */
-.editor-wrapper {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-}
-
-.lock-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  cursor: pointer;
-}
-
-.lock-overlay span {
-  background: var(--bg-secondary);
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-}
-
 /* 图片预览 */
 .image-preview {
   flex: 1;
@@ -918,15 +876,6 @@ function formatTime(timestamp) {
 
 .btn-danger:hover {
   background: #c82333;
-}
-
-.btn-warning {
-  background: #ffc107;
-  color: #212529;
-}
-
-.btn-warning:hover {
-  background: #e0a800;
 }
 
 /* 对话框 */
