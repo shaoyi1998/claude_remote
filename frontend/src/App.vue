@@ -4,6 +4,7 @@
 
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
+import { syncFromServer } from './stores/shortcuts'
 
 // 修复移动端 100vh 问题
 function setVH() {
@@ -11,9 +12,12 @@ function setVH() {
   document.documentElement.style.setProperty('--vh', `${vh}px`)
 }
 
-onMounted(() => {
+onMounted(async () => {
   setVH()
   window.addEventListener('resize', setVH)
+
+  // 应用启动时从服务器同步快捷键配置（如果已登录）
+  await syncFromServer()
 })
 
 onUnmounted(() => {

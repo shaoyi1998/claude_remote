@@ -206,6 +206,7 @@ import {
   keyToTmux,
   tmuxToKey,
   syncToServer,
+  syncFromServer,
 } from '../stores/shortcuts'
 import { isCapacitorApp } from '../utils/platform'
 
@@ -239,7 +240,7 @@ const editPreview = computed(() => {
   return getKeyDisplayName(shortcut)
 })
 
-onMounted(() => {
+onMounted(async () => {
   // 加载保存的设置
   const savedFontSize = localStorage.getItem('fontSize')
   const savedTerminalFontSize = localStorage.getItem('terminalFontSize')
@@ -257,6 +258,9 @@ onMounted(() => {
   const serverAddr = getServerAddress()
   serverHost.value = serverAddr.host || ''
   serverPort.value = serverAddr.port || '8000'
+
+  // 先从服务器同步快捷键配置（如果已登录）
+  await syncFromServer()
 
   // 加载快捷键配置
   shortcuts.value = getShortcuts()
