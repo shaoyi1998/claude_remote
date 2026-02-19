@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7天
 
+    # 登录安全配置
+    login_max_attempts: int = 5  # 最大登录尝试次数
+    login_lockout_minutes: int = 1440  # 锁定时间（分钟），默认24小时
+
     # 数据库配置
     database_url: str = "sqlite:///./claude_remote.db"
 
