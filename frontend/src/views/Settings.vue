@@ -177,6 +177,49 @@
         </div>
       </div>
 
+      <!-- 账号安全 -->
+      <div class="settings-item">
+        <div class="settings-label">
+          <span>账号安全</span>
+        </div>
+        <p class="settings-hint">修改登录密码</p>
+
+        <div class="password-form">
+          <div class="password-input-group">
+            <label>当前密码</label>
+            <input
+              v-model="oldPassword"
+              type="password"
+              placeholder="输入当前密码"
+              class="text-input"
+            />
+          </div>
+          <div class="password-input-group">
+            <label>新密码</label>
+            <input
+              v-model="newPassword"
+              type="password"
+              placeholder="输入新密码"
+              class="text-input"
+            />
+          </div>
+          <div class="password-input-group">
+            <label>确认新密码</label>
+            <input
+              v-model="confirmPassword"
+              type="password"
+              placeholder="再次输入新密码"
+              class="text-input"
+            />
+          </div>
+          <button class="btn btn-primary" @click="handleChangePassword" :disabled="passwordLoading">
+            {{ passwordLoading ? '修改中...' : '修改密码' }}
+          </button>
+          <p v-if="passwordError" class="password-error">{{ passwordError }}</p>
+          <p v-if="passwordSuccess" class="password-success">{{ passwordSuccess }}</p>
+        </div>
+      </div>
+
       <!-- 反向代理 -->
       <div class="settings-item">
         <div class="settings-label">
@@ -192,7 +235,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { saveServerConfig, getServerAddress, updateApiBaseURL } from '../api'
+import api, { saveServerConfig, getServerAddress, updateApiBaseURL } from '../api'
 import {
   getShortcuts,
   saveShortcutsLocal,
@@ -218,6 +261,14 @@ const serverPort = ref('8000')
 
 // 平台检测
 const isApp = isCapacitorApp()
+
+// 密码修改
+const oldPassword = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const passwordLoading = ref(false)
+const passwordError = ref('')
+const passwordSuccess = ref('')
 
 // 快捷键配置
 const shortcuts = ref({ commands: [], shortcuts: [] })
@@ -412,6 +463,47 @@ async function resetAllShortcuts() {
 
 function getShortcutDisplay(item) {
   return getKeyDisplayName(item)
+}
+
+// 修改密码
+async function handleChangePassword() {
+  passwordError.value = ''
+  passwordSuccess.value = ''
+
+  // 验证
+  if (!oldPassword.value) {
+    passwordError.value = '请输入当前密码'
+    return
+  }
+  if (!newPassword.value) {
+    passwordError.value = '请输入新密码'
+    return
+  }
+  if (newPassword.value.length < 6) {
+    passwordError.value = '新密码至少需要6个字符'
+    return
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    passwordError.value = '两次输入的密码不一致'
+    return
+  }
+
+  passwordLoading.value = true
+
+  try {
+    await api.post('/users/change-password', {
+      old_password: oldPassword.value,
+      new_password: newPassword.value
+    })
+    passwordSuccess.value = '密码修改成功！'
+    oldPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+  } catch (e) {
+    passwordError.value = e.response?.data?.detail || '密码修改失败'
+  } finally {
+    passwordLoading.value = false
+  }
 }
 </script>
 
@@ -841,5 +933,33 @@ function getShortcutDisplay(item) {
 .settings-hint .highlight {
   color: var(--primary-color);
   font-weight: 500;
+}
+
+/* 密码修改样式 */
+.password-form {
+  margin-top: 8px;
+}
+
+.password-input-group {
+  margin-bottom: 10px;
+}
+
+.password-input-group label {
+  display: block;
+  font-size: 0.85em;
+  margin-bottom: 4px;
+  color: #aaa;
+}
+
+.password-error {
+  color: #f85149;
+  font-size: 0.85em;
+  margin-top: 8px;
+}
+
+.password-success {
+  color: #3fb950;
+  font-size: 0.85em;
+  margin-top: 8px;
 }
 </style>
