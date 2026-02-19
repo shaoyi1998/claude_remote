@@ -96,11 +96,114 @@ npm run dev
 
 ## 外网访问方案
 
-### 方案一：公网服务器 + WireGuard + Nginx 转发（无需域名）
+### 方案一：直接部署在公网 Linux 服务器（最简单）
+
+如果你有公网 Linux 服务器，直接在上面部署 Claude Remote，无需 WireGuard。
+
+> **优势**：最简单，只需 Nginx 反向代理。
+
+#### 架构图
+
+```
+                    互联网
+                       |
+              公网服务器 (VPS)
+              IP: 1.2.3.4
+              Nginx + Claude Remote
+```
+
+#### 1. 在服务器上部署
+
+```bash
+# 克隆项目
+git clone https://github.com/shaoyi1998/claude_remote.git
+cd claude_remote
+
+# 安装后端依赖
+cd backend
+pip install -r requirements.txt
+cp .env.example .env
+# 编辑 .env 修改 SECRET_KEY
+
+# 安装前端依赖并构建
+cd ../frontend
+npm install
+npm run build
+```
+
+#### 2. 启动服务
+
+```bash
+# 后台启动后端
+cd backend
+nohup python3 -m uvicorn main:app --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
+
+# 使用 serve 或 nginx 托管前端静态文件
+# 方式一：使用 serve
+npm install -g serve
+nohup serve -s ../frontend/dist -l 3000 > frontend.log 2>&1 &
+
+# 方式二：直接用 Nginx 托管（推荐）
+```
+
+#### 3. 配置 Nginx
+
+```nginx
+# /etc/nginx/sites-available/claude-remote
+server {
+    listen 8080;  # 或其他端口
+    server_name _;
+
+    # 前端静态文件
+    location / {
+        root /path/to/claude_remote/frontend/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 后端 API
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # WebSocket（终端）
+    location /ws/ {
+        proxy_pass http://127.0.0.1:8000/ws/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400;
+    }
+
+    # 反向代理（可选）
+    location /proxy/ {
+        proxy_pass http://127.0.0.1:8000/proxy/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+```bash
+# 启用配置
+sudo ln -s /etc/nginx/sites-available/claude-remote /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+访问地址：`http://1.2.3.4:8080`
+
+---
+
+### 方案二：公网服务器 + WireGuard + Nginx 转发（穿透内网）
 
 如果你有一台公网服务器，可以通过 WireGuard VPN 连接家用电脑，然后用 Nginx 反向代理实现外网访问。
 
-> **优势**：无需域名，直接用公网 IP + 端口访问。
+> **适用场景**：Claude Remote 运行在家用电脑（内网），通过公网服务器暴露服务。
 
 #### 架构图
 
@@ -314,7 +417,7 @@ sudo certbot --nginx -d your-domain.com
 CORS_ORIGINS=https://your-domain.com
 ```
 
-### 方案二：Cloudflare Tunnel（更简单）
+### 方案三：Cloudflare Tunnel（最简单，需域名）
 
 如果你不想配置 WireGuard，可以使用 Cloudflare Tunnel：
 
