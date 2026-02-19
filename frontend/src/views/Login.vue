@@ -70,7 +70,7 @@ async function checkInit() {
   try {
     const res = await api.post('/users/init')
     if (res.data.message) {
-      error.value = `初始账号: ${res.data.username} / ${res.data.password}`
+      error.value = `初始账号: ${res.data.username} / admin123（请登录后立即修改密码）`
     }
   } catch (e) {
     // 已有用户，忽略

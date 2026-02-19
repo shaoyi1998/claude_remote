@@ -72,8 +72,11 @@ npm install
 ### 启动
 
 ```bash
-# 启动后端（在 backend 目录）
+# 启动后端（在wsl的 backend 目录）
 python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
+
+# 在windows cmd下启动（用wsl启动 D:\pycharm项目\claude_code远程\backend 的项目）
+ wsl -d Ubuntu-22.04 -- bash -c "cd '/mnt/d/pycharm项目/claude_code远程/backend' && python3 -m uvicorn main:app --host 0.0.0.0 --port 8000" 
 
 # 启动前端（在 frontend 目录）
 npm run dev
