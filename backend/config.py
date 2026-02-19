@@ -2,7 +2,7 @@
 应用配置
 """
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List
 
 
 class Settings(BaseSettings):
@@ -24,8 +24,17 @@ class Settings(BaseSettings):
     # Claude Code 命令
     claude_command: str = "claude"
 
+    # CORS 配置（生产环境应设置具体域名，用逗号分隔）
+    cors_origins: str = "*"  # 默认允许所有，生产环境应设置为具体域名
+
     class Config:
         env_file = ".env"
+
+    def get_cors_origins(self) -> List[str]:
+        """获取 CORS 允许的来源列表"""
+        if self.cors_origins == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 settings = Settings()

@@ -43,3 +43,12 @@ ENV/
 # Cache
 .cache/
 *.tsbuildinfo
+
+# Database files (包含用户数据，不应提交)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Claude Code 项目配置
+.claude/

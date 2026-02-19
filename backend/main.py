@@ -15,6 +15,7 @@ from models.task import Task
 from models.user import User
 from services.auth import verify_token
 from platform_utils import get_terminal_service
+from config import settings
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -33,10 +34,10 @@ app = FastAPI(
 # 启动时创建数据库表
 create_tables()
 
-# CORS 配置
+# CORS 配置（从配置文件读取）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,6 +76,14 @@ async def websocket_terminal(websocket: WebSocket, task_id: str):
     """WebSocket 终端连接"""
     await websocket.accept()
 
+    # 验证 task_id 是否为有效数字
+    try:
+        task_id_int = int(task_id)
+    except ValueError:
+        logger.warning(f"Invalid task_id: {task_id}")
+        await websocket.close(code=4002, reason="Invalid task ID")
+        return
+
     # 从 query 参数获取 token
     token = websocket.query_params.get("token")
 
@@ -91,7 +100,7 @@ async def websocket_terminal(websocket: WebSocket, task_id: str):
     db = SessionLocal()
     session_name = None
     try:
-        task = db.query(Task).filter(Task.id == int(task_id)).first()
+        task = db.query(Task).filter(Task.id == task_id_int).first()
         if not task:
             logger.warning(f"Task {task_id} not found")
             await websocket.close()
