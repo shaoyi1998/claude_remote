@@ -96,9 +96,11 @@ npm run dev
 
 ## 外网访问方案
 
-### 方案一：公网服务器 + WireGuard + Nginx 转发
+### 方案一：公网服务器 + WireGuard + Nginx 转发（无需域名）
 
 如果你有一台公网服务器，可以通过 WireGuard VPN 连接家用电脑，然后用 Nginx 反向代理实现外网访问。
+
+> **优势**：无需域名，直接用公网 IP + 端口访问。
 
 #### 架构图
 
@@ -172,6 +174,57 @@ sudo systemctl enable wg-quick@wg0
 ```
 
 #### 4. 配置 Nginx（公网服务器）
+
+**方式一：无需域名，直接用 IP + 端口（简单快速）**
+
+```nginx
+# /etc/nginx/sites-available/claude-remote
+server {
+    listen 8080;  # 使用非标准端口，避免与其他服务冲突
+    server_name _;
+
+    # 前端
+    location / {
+        proxy_pass http://10.0.0.2:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # 后端 API
+    location /api/ {
+        proxy_pass http://10.0.0.2:8000/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # WebSocket（终端）
+    location /ws/ {
+        proxy_pass http://10.0.0.2:8000/ws/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400;
+    }
+
+    # 反向代理（可选）
+    location /proxy/ {
+        proxy_pass http://10.0.0.2:8000/proxy/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+访问地址：`http://1.2.3.4:8080`
+
+**方式二：使用域名 + HTTPS（更安全）**
 
 ```nginx
 # /etc/nginx/sites-available/claude-remote
