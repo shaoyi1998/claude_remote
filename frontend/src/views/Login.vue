@@ -50,6 +50,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '../api'
+import { syncFromServer } from '../stores/shortcuts'
 
 const router = useRouter()
 const loading = ref(false)
@@ -87,6 +88,10 @@ async function handleLogin() {
 
     const res = await api.post('/auth/login', formData)
     localStorage.setItem('token', res.data.access_token)
+
+    // 登录成功后从服务器同步快捷键配置
+    await syncFromServer()
+
     router.push('/')
   } catch (e) {
     error.value = e.response?.data?.detail || '登录失败'

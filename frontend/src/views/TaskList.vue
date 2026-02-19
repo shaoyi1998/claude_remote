@@ -96,7 +96,10 @@
           <button class="btn btn-sm btn-secondary" @click="showSettings = false">关闭</button>
         </div>
         <div class="modal-body">
-          <p class="settings-task-name">{{ currentTask?.name }}</p>
+          <div class="form-group">
+            <label class="form-label">任务名称</label>
+            <input type="text" v-model="editTaskName" class="text-input" placeholder="输入任务名称" />
+          </div>
           <p class="settings-hint">修改以下设置后，下次恢复会话时生效</p>
           <div class="checkbox-group">
             <label class="checkbox-label">
@@ -134,6 +137,7 @@ const showSettings = ref(false)
 const savingSettings = ref(false)
 const currentTask = ref(null)
 const currentFilter = ref('all')
+const editTaskName = ref('')
 
 const settings = reactive({
   skip_permissions: false,
@@ -198,6 +202,7 @@ function goToSettings() {
 
 function openSettings(task) {
   currentTask.value = task
+  editTaskName.value = task.name
   settings.skip_permissions = task.skip_permissions
   settings.teammate_mode = task.teammate_mode
   showSettings.value = true
@@ -207,6 +212,13 @@ async function saveSettings() {
   if (!currentTask.value) return
   savingSettings.value = true
   try {
+    // 保存任务名称（如果有修改）
+    if (editTaskName.value !== currentTask.value.name && editTaskName.value.trim()) {
+      await api.patch(`/tasks/${currentTask.value.id}`, {
+        name: editTaskName.value.trim()
+      })
+    }
+    // 保存其他设置
     await api.patch(`/tasks/${currentTask.value.id}`, {
       skip_permissions: settings.skip_permissions,
       teammate_mode: settings.teammate_mode
@@ -342,7 +354,9 @@ function logout() {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -355,6 +369,7 @@ function logout() {
   width: 90%;
   max-width: 400px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  opacity: 1;
 }
 
 .modal-header {
@@ -379,9 +394,32 @@ function logout() {
   border-top: 1px solid var(--bg-secondary);
 }
 
-.settings-task-name {
-  font-weight: 600;
-  margin-bottom: 8px;
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+}
+
+.text-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #333);
+  border-radius: var(--border-radius);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
 }
 
 .settings-hint {

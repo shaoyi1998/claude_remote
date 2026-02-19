@@ -1,7 +1,10 @@
 /**
  * 快捷键配置存储
  * 支持自定义命令按钮和自定义快捷键
+ * 支持云同步（与用户账号绑定）
  */
+
+import api from '../api'
 
 // 可用的修饰键
 export const availableModifiers = [
@@ -92,9 +95,55 @@ export function getShortcuts() {
   return JSON.parse(JSON.stringify(defaultShortcuts))
 }
 
-// 保存快捷键配置
-export function saveShortcuts(shortcuts) {
+// 保存快捷键配置（本地 + 云同步）
+export async function saveShortcuts(shortcuts) {
+  // 保存到本地
   localStorage.setItem('shortcuts_v3', JSON.stringify(shortcuts))
+
+  // 同步到服务器（如果已登录）
+  await syncToServer(shortcuts)
+}
+
+// 同步保存（仅本地，用于兼容旧代码）
+export function saveShortcutsLocal(shortcuts) {
+  localStorage.setItem('shortcuts_v3', JSON.stringify(shortcuts))
+}
+
+// 从服务器同步配置
+export async function syncFromServer() {
+  try {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      return null // 未登录，不同步
+    }
+
+    const res = await api.get('/users/config')
+    if (res.data.shortcuts) {
+      // 保存到本地缓存
+      localStorage.setItem('shortcuts_v3', JSON.stringify(res.data.shortcuts))
+      return res.data.shortcuts
+    }
+    return null
+  } catch (e) {
+    console.error('Failed to sync shortcuts from server:', e)
+    return null
+  }
+}
+
+// 同步配置到服务器
+export async function syncToServer(shortcuts) {
+  try {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      return false // 未登录，不同步
+    }
+
+    await api.post('/users/config', { shortcuts })
+    return true
+  } catch (e) {
+    console.error('Failed to sync shortcuts to server:', e)
+    return false
+  }
 }
 
 // 重置为默认配置
@@ -127,35 +176,35 @@ export function getEnabledShortcuts() {
 }
 
 // 更新单个配置项
-export function updateShortcut(category, id, data) {
+export async function updateShortcut(category, id, data) {
   const shortcuts = getShortcuts()
   const index = shortcuts[category].findIndex(item => item.id === id)
   if (index !== -1) {
     shortcuts[category][index] = { ...shortcuts[category][index], ...data }
-    saveShortcuts(shortcuts)
+    await saveShortcuts(shortcuts)
   }
   return shortcuts
 }
 
 // 添加新配置项
-export function addShortcut(category, item) {
+export async function addShortcut(category, item) {
   const shortcuts = getShortcuts()
   const newId = `${category}_${Date.now()}`
   shortcuts[category].push({ ...item, id: newId })
-  saveShortcuts(shortcuts)
+  await saveShortcuts(shortcuts)
   return shortcuts
 }
 
 // 删除配置项
-export function deleteShortcut(category, id) {
+export async function deleteShortcut(category, id) {
   const shortcuts = getShortcuts()
   shortcuts[category] = shortcuts[category].filter(item => item.id !== id)
-  saveShortcuts(shortcuts)
+  await saveShortcuts(shortcuts)
   return shortcuts
 }
 
 // 移动配置项顺序（direction: 'up' 或 'down'）
-export function moveShortcut(category, id, direction) {
+export async function moveShortcut(category, id, direction) {
   const shortcuts = getShortcuts()
   const list = shortcuts[category]
   const index = list.findIndex(item => item.id === id)
@@ -172,7 +221,7 @@ export function moveShortcut(category, id, direction) {
   list[index] = list[newIndex]
   list[newIndex] = temp
 
-  saveShortcuts(shortcuts)
+  await saveShortcuts(shortcuts)
   return shortcuts
 }
 
