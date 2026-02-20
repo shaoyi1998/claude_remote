@@ -68,13 +68,13 @@
 
         <!-- 右侧快捷栏 - 竖屏和横屏都显示 -->
         <div class="shortcuts-panel right-sidebar">
-          <!-- 折叠/展开按钮 -->
+          <!-- 模式切换按钮 -->
           <button class="sidebar-toggle" @click="toggleSidebar">
-            {{ sidebarCollapsed ? '◀' : '✕' }}
+            {{ modeLabels[sidebarMode] }}
           </button>
 
-          <!-- 快捷按钮列表（可折叠） -->
-          <div v-if="!sidebarCollapsed" class="sidebar-buttons">
+          <!-- Home 模式：基础按键 + 前5命令 + 前5快捷键 -->
+          <div v-if="sidebarMode === 0" class="sidebar-buttons">
             <button class="side-btn" @click="sendShortcut('escape')">Esc</button>
             <button class="side-btn" @click="sendShortcut('up')">↑</button>
             <button class="side-btn" @click="sendShortcut('down')">↓</button>
@@ -89,15 +89,15 @@
             <button class="side-btn" @click="sendText('/')">/</button>
             <button class="side-btn" @click="scrollToBottom">底部</button>
 
-            <!-- 自定义命令（最多显示 N 个） -->
-            <template v-for="(cmd, idx) in enabledCommands.slice(0, maxVisibleCommands)" :key="cmd.id">
+            <!-- 自定义命令（最多显示 5 个） -->
+            <template v-for="(cmd, idx) in enabledCommands.slice(0, 5)" :key="cmd.id">
               <button class="side-btn side-btn-cmd" @click="sendCommand(cmd.command)">
                 {{ cmd.label }}
               </button>
             </template>
 
-            <!-- 自定义快捷键（最多显示 N 个） -->
-            <template v-for="(hk, idx) in enabledShortcutsList.slice(0, maxVisibleShortcuts)" :key="hk.id">
+            <!-- 自定义快捷键（最多显示 5 个） -->
+            <template v-for="(hk, idx) in enabledShortcutsList.slice(0, 5)" :key="hk.id">
               <button class="side-btn side-btn-hk" @click="sendShortcutByItem(hk)">
                 {{ hk.label }}
               </button>
@@ -107,6 +107,24 @@
             <button v-if="task.status === 'stopped'" class="side-btn side-btn-restore" @click="restoreTask">
               恢复
             </button>
+          </div>
+
+          <!-- 快捷键模式 (K)：显示所有快捷键 -->
+          <div v-else-if="sidebarMode === 1" class="sidebar-buttons">
+            <template v-for="hk in enabledShortcutsList" :key="hk.id">
+              <button class="side-btn side-btn-hk" @click="sendShortcutByItem(hk)">
+                {{ hk.label }}
+              </button>
+            </template>
+          </div>
+
+          <!-- 快捷输入模式 (C)：显示所有命令 -->
+          <div v-else class="sidebar-buttons">
+            <template v-for="cmd in enabledCommands" :key="cmd.id">
+              <button class="side-btn side-btn-cmd" @click="sendCommand(cmd.command)">
+                {{ cmd.label }}
+              </button>
+            </template>
           </div>
 
           <!-- Enter 按钮 - 始终显示在底部 -->
@@ -135,12 +153,14 @@ const terminalConnecting = ref(false)
 const terminalContainer = ref(null)
 const inputLocked = ref(false)
 
-// 右侧快捷栏折叠状态
-const sidebarCollapsed = ref(false)
+// 右侧快捷栏模式：0=Home, 1=快捷键, 2=快捷输入
+const sidebarMode = ref(0)
+const modeLabels = ['H', 'K', 'C']
 
-// 最多显示的按钮数
-const maxVisibleCommands = 5
-const maxVisibleShortcuts = 5
+// 切换侧边栏模式
+function cycleSidebarMode() {
+  sidebarMode.value = (sidebarMode.value + 1) % 3
+}
 
 // 获取启用的快捷键配置
 const enabledCommands = computed(() => getEnabledCommands())
@@ -148,7 +168,7 @@ const enabledShortcutsList = computed(() => getEnabledShortcuts())
 
 // 切换侧边栏折叠
 function toggleSidebar() {
-  sidebarCollapsed.value = !sidebarCollapsed.value
+  cycleSidebarMode()
 }
 
 let terminal = null
@@ -812,13 +832,15 @@ function openFileBrowser() {
 
 .sidebar-toggle {
   padding: 8px 4px;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
+  font-weight: bold;
   background: var(--bg-card);
   border: none;
   border-radius: 4px;
   color: var(--text-secondary);
   cursor: pointer;
   touch-action: manipulation;
+  transition: background 0.15s, color 0.15s;
 }
 
 .sidebar-toggle:active {

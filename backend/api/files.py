@@ -462,11 +462,11 @@ async def read_binary_file(path: str = Query(..., description="要读取的文�
 
     # 检查文件大小（限制大文件）
     file_size = os.path.getsize(path)
-    max_size = 10 * 1024 * 1024  # 10MB
+    max_size = 50 * 1024 * 1024  # 50MB
     if file_size > max_size:
         raise HTTPException(
             status_code=413,
-            detail=f"文件过大（{file_size / 1024 / 1024:.2f}MB），超过限制（10MB）"
+            detail=f"文件过大（{file_size / 1024 / 1024:.2f}MB），超过限制（50MB）"
         )
 
     try:

@@ -57,6 +57,11 @@
         <span class="file-name">{{ item.name }}</span>
         <span class="file-size">{{ formatSize(item.size) }}</span>
         <span class="file-time">{{ formatTime(item.modified) }}</span>
+        <!-- 操作按钮 -->
+        <div class="file-actions" @click.stop>
+          <button v-if="!item.is_dir" class="action-btn action-btn-download" @click="downloadFileDirect(item)" title="下载">↓</button>
+          <button class="action-btn action-btn-delete" @click="deleteFileDirect(item)" title="删除">×</button>
+        </div>
       </div>
     </div>
 
@@ -71,7 +76,7 @@
         <span class="preview-title">{{ previewFile.name }}</span>
         <div class="preview-actions">
           <button
-            v-if="!isEditMode && !isImageFile"
+            v-if="!isEditMode && !isImageFile && !isAudioFile"
             class="btn btn-sm btn-primary"
             @click="enterEditMode"
           >
@@ -85,8 +90,9 @@
               取消
             </button>
           </template>
+          <button class="btn btn-sm btn-secondary" @click="downloadFile" title="下载文件">下载</button>
           <button class="btn btn-sm btn-secondary" @click="copyPath" title="复制路径">路径</button>
-          <button v-if="!isEditMode" class="btn btn-sm btn-secondary" @click="copyContent">复制</button>
+          <button v-if="!isEditMode && !isImageFile && !isAudioFile" class="btn btn-sm btn-secondary" @click="copyContent">复制</button>
           <button v-if="!isEditMode" class="btn btn-sm btn-danger" @click="deleteFile">删除</button>
           <button class="btn btn-sm btn-secondary" @click="closePreview">关闭</button>
         </div>
@@ -97,6 +103,12 @@
       <!-- 图片预览 -->
       <div v-else-if="isImageFile && imageData" class="image-preview">
         <img :src="imageData" :alt="previewFile.name" />
+      </div>
+      <!-- 音频预览 -->
+      <div v-else-if="isAudioFile && audioData" class="audio-preview">
+        <div class="audio-icon">&#9835;</div>
+        <div class="audio-name">{{ previewFile.name }}</div>
+        <audio controls :src="audioData" preload="metadata"></audio>
       </div>
       <!-- 编辑模式：Monaco Editor -->
       <div v-else-if="isEditMode" ref="editorContainer" class="editor-container"></div>
@@ -253,6 +265,16 @@ const isImageFile = computed(() => {
   return ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico'].includes(ext)
 })
 
+// 判断是否为音频文件
+const isAudioFile = computed(() => {
+  if (!previewFile.value) return false
+  const ext = previewFile.value.extension?.toLowerCase() || ''
+  return ['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac'].includes(ext)
+})
+
+// 音频数据（base64）
+const audioData = ref(null)
+
 // 获取Monaco语言ID
 function getMonacoLanguage(extension) {
   const langMap = {
@@ -382,12 +404,14 @@ async function openPreview(item) {
   previewFile.value = item
   previewContent.value = ''
   imageData.value = null
+  audioData.value = null
   previewLoading.value = true
   isEditMode.value = false
 
   // 判断是否为图片
   const ext = item.extension?.toLowerCase() || ''
   const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.ico']
+  const audioExts = ['.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac']
 
   if (imageExts.includes(ext)) {
     // 读取图片
@@ -398,6 +422,18 @@ async function openPreview(item) {
       imageData.value = `data:${res.data.mime_type};base64,${res.data.base64}`
     } catch (e) {
       previewContent.value = `无法读取图片: ${e.response?.data?.detail || e.message}`
+    } finally {
+      previewLoading.value = false
+    }
+  } else if (audioExts.includes(ext)) {
+    // 读取音频
+    try {
+      const res = await api.get('/files/binary', {
+        params: { path: item.path }
+      })
+      audioData.value = `data:${res.data.mime_type};base64,${res.data.base64}`
+    } catch (e) {
+      previewContent.value = `无法读取音频: ${e.response?.data?.detail || e.message}`
     } finally {
       previewLoading.value = false
     }
@@ -420,6 +456,7 @@ function closePreview() {
   previewFile.value = null
   previewContent.value = ''
   imageData.value = null
+  audioData.value = null
   isEditMode.value = false
   // 销毁编辑器
   if (editor) {
@@ -447,6 +484,98 @@ async function copyPath() {
     } catch (e) {
       alert('复制失败')
     }
+  }
+}
+
+// 下载文件
+async function downloadFile() {
+  if (!previewFile.value) return
+
+  // 检查文件大小（50MB 限制）
+  const maxSize = 50 * 1024 * 1024
+  if (previewFile.value.size > maxSize) {
+    const sizeMB = (previewFile.value.size / 1024 / 1024).toFixed(2)
+    alert(`文件过大（${sizeMB}MB），超过限制（50MB）`)
+    return
+  }
+
+  try {
+    const res = await api.get('/files/binary', {
+      params: { path: previewFile.value.path }
+    })
+
+    // 解码 base64
+    const binary = atob(res.data.base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i)
+    }
+
+    // 创建 Blob 并下载
+    const blob = new Blob([bytes], { type: res.data.mime_type })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = previewFile.value.name
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('下载失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+// 直接下载文件（从列表）
+async function downloadFileDirect(item) {
+  // 检查文件大小（50MB 限制）
+  const maxSize = 50 * 1024 * 1024
+  if (item.size > maxSize) {
+    const sizeMB = (item.size / 1024 / 1024).toFixed(2)
+    alert(`文件过大（${sizeMB}MB），超过限制（50MB）`)
+    return
+  }
+
+  try {
+    const res = await api.get('/files/binary', {
+      params: { path: item.path }
+    })
+
+    // 解码 base64
+    const binary = atob(res.data.base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i)
+    }
+
+    // 创建 Blob 并下载
+    const blob = new Blob([bytes], { type: res.data.mime_type })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = item.name
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('下载失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+// 直接删除文件/文件夹（从列表）
+async function deleteFileDirect(item) {
+  const typeText = item.is_dir ? '文件夹' : '文件'
+  const confirmed = confirm(`确定要删除${typeText} "${item.name}" 吗？此操作不可恢复！`)
+  if (!confirmed) return
+
+  try {
+    await api.delete('/files/delete', {
+      params: { path: item.path }
+    })
+    loadDirectory(currentPath.value)
+  } catch (e) {
+    alert('删除失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -730,7 +859,7 @@ function formatTime(timestamp) {
 
 .file-item {
   display: grid;
-  grid-template-columns: 32px 1fr 80px 100px;
+  grid-template-columns: 32px 1fr 80px 100px auto;
   gap: 8px;
   align-items: center;
   padding: 12px;
@@ -753,6 +882,51 @@ function formatTime(timestamp) {
 
 .file-item.is-dir .file-name {
   font-weight: 500;
+}
+
+/* 文件操作按钮 */
+.file-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.file-item:hover .file-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.action-btn-download {
+  background: rgba(97, 175, 239, 0.2);
+  color: #61afef;
+}
+
+.action-btn-download:hover {
+  background: #61afef;
+  color: #fff;
+}
+
+.action-btn-delete {
+  background: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+}
+
+.action-btn-delete:hover {
+  background: #dc3545;
+  color: #fff;
 }
 
 .file-icon {
@@ -868,6 +1042,36 @@ function formatTime(timestamp) {
   object-fit: contain;
 }
 
+/* 音频预览 */
+.audio-preview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--bg-primary);
+  padding: 24px;
+}
+
+.audio-icon {
+  font-size: 4rem;
+  color: var(--primary-color, #61afef);
+}
+
+.audio-name {
+  font-size: 1rem;
+  color: var(--text-color);
+  text-align: center;
+  word-break: break-all;
+  max-width: 100%;
+}
+
+.audio-preview audio {
+  width: 100%;
+  max-width: 400px;
+}
+
 /* 按钮样式 */
 .btn-danger {
   background: #dc3545;
@@ -931,11 +1135,16 @@ function formatTime(timestamp) {
 /* 响应式 */
 @media (max-width: 480px) {
   .file-item {
-    grid-template-columns: 28px 1fr 60px;
+    grid-template-columns: 28px 1fr 50px auto;
   }
 
   .file-time {
     display: none;
+  }
+
+  /* 移动端始终显示操作按钮 */
+  .file-actions {
+    opacity: 1;
   }
 }
 </style>
