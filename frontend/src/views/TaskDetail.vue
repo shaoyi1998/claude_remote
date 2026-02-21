@@ -7,32 +7,23 @@
     </div>
 
     <template v-if="task">
-      <!-- 紧凑头部 - 合并原有头部、状态栏和底部栏 -->
+      <!-- 紧凑头部 -->
       <div class="compact-header">
-        <!-- 返回按钮 -->
         <button class="header-btn" @click="goBack" title="返回">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 12H5M12 19l-7-7 7-7"/>
           </svg>
         </button>
-
-        <!-- 任务名称 + 状态指示点 -->
         <h1 class="header-title">
           {{ task.name || '任务详情' }}
           <span :class="['status-dot', 'status-' + task.status]" :title="statusText(task.status)"></span>
         </h1>
-
-        <!-- 工作目录 -->
-        <span class="header-path" :title="task.work_dir">{{ task.work_dir }}</span>
-
-        <!-- 文件管理按钮 -->
+        <span class="header-dir">{{ task.work_dir }}</span>
         <button class="header-btn" @click="openFileBrowser" title="文件管理">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
           </svg>
         </button>
-
-        <!-- 锁定/解锁按钮 -->
         <button class="header-btn" :class="{ locked: inputLocked }" @click="toggleLock" :title="inputLocked ? '解锁' : '锁定'">
           <svg v-if="inputLocked" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
@@ -76,10 +67,6 @@
           <!-- Home 模式：基础按键 + 前5命令 + 前5快捷键 -->
           <div v-if="sidebarMode === 0" class="sidebar-buttons">
             <button class="side-btn" @click="sendShortcut('escape')">Esc</button>
-            <button class="side-btn" @click="sendShortcut('up')">↑</button>
-            <button class="side-btn" @click="sendShortcut('down')">↓</button>
-            <button class="side-btn" @click="sendShortcut('left')">←</button>
-            <button class="side-btn" @click="sendShortcut('right')">→</button>
             <button class="side-btn"
               @touchstart.prevent="startBackspaceRepeat"
               @touchend="stopBackspaceRepeat"
@@ -87,22 +74,23 @@
               @mouseup="stopBackspaceRepeat"
               @mouseleave="stopBackspaceRepeat">退格</button>
             <button class="side-btn" @click="sendText('/')">/</button>
+            <button class="side-btn" @click="sendShortcut('up')">↑</button>
+            <button class="side-btn" @click="sendShortcut('down')">↓</button>
+            <button class="side-btn" @click="sendShortcut('left')">←</button>
+            <button class="side-btn" @click="sendShortcut('right')">→</button>
             <button class="side-btn" @click="scrollToBottom">底部</button>
-
             <!-- 自定义命令（最多显示 5 个） -->
             <template v-for="(cmd, idx) in enabledCommands.slice(0, 5)" :key="cmd.id">
               <button class="side-btn side-btn-cmd" @click="sendCommand(cmd.command)">
                 {{ cmd.label }}
               </button>
             </template>
-
             <!-- 自定义快捷键（最多显示 5 个） -->
             <template v-for="(hk, idx) in enabledShortcutsList.slice(0, 5)" :key="hk.id">
               <button class="side-btn side-btn-hk" @click="sendShortcutByItem(hk)">
                 {{ hk.label }}
               </button>
             </template>
-
             <!-- 恢复按钮（仅停止状态显示） -->
             <button v-if="task.status === 'stopped'" class="side-btn side-btn-restore" @click="restoreTask">
               恢复
@@ -118,13 +106,31 @@
             </template>
           </div>
 
-          <!-- 快捷输入模式 (C)：显示所有命令 -->
-          <div v-else class="sidebar-buttons">
+          <!-- 命令模式 (C)：显示所有命令 -->
+          <div v-else-if="sidebarMode === 2" class="sidebar-buttons">
             <template v-for="cmd in enabledCommands" :key="cmd.id">
               <button class="side-btn side-btn-cmd" @click="sendCommand(cmd.command)">
                 {{ cmd.label }}
               </button>
             </template>
+          </div>
+
+          <!-- 数字模式 (N)：方向键 + 0-9 -->
+          <div v-else class="sidebar-buttons">
+            <button class="side-btn side-btn-num" @click="sendShortcut('up')">↑</button>
+            <button class="side-btn side-btn-num" @click="sendShortcut('down')">↓</button>
+            <button class="side-btn side-btn-num" @click="sendShortcut('left')">←</button>
+            <button class="side-btn side-btn-num" @click="sendShortcut('right')">→</button>
+            <button class="side-btn side-btn-num" @click="sendText('1')">1</button>
+            <button class="side-btn side-btn-num" @click="sendText('2')">2</button>
+            <button class="side-btn side-btn-num" @click="sendText('3')">3</button>
+            <button class="side-btn side-btn-num" @click="sendText('4')">4</button>
+            <button class="side-btn side-btn-num" @click="sendText('5')">5</button>
+            <button class="side-btn side-btn-num" @click="sendText('6')">6</button>
+            <button class="side-btn side-btn-num" @click="sendText('7')">7</button>
+            <button class="side-btn side-btn-num" @click="sendText('8')">8</button>
+            <button class="side-btn side-btn-num" @click="sendText('9')">9</button>
+            <button class="side-btn side-btn-num" @click="sendText('0')">0</button>
           </div>
 
           <!-- Enter 按钮 - 始终显示在底部 -->
@@ -153,13 +159,13 @@ const terminalConnecting = ref(false)
 const terminalContainer = ref(null)
 const inputLocked = ref(false)
 
-// 右侧快捷栏模式：0=Home, 1=快捷键, 2=快捷输入
+// 右侧快捷栏模式：0=Home, 1=快捷键, 2=命令, 3=数字
 const sidebarMode = ref(0)
-const modeLabels = ['H', 'K', 'C']
+const modeLabels = ['H', 'K', 'C', 'N']
 
 // 切换侧边栏模式
 function cycleSidebarMode() {
-  sidebarMode.value = (sidebarMode.value + 1) % 3
+  sidebarMode.value = (sidebarMode.value + 1) % 4
 }
 
 // 获取启用的快捷键配置
@@ -558,11 +564,11 @@ async function sendShortcutByItem(shortcut) {
 
 // 打开文件浏览器
 function openFileBrowser() {
-  if (task.value?.work_dir) {
-    router.push(`/files/${route.params.id}?path=${encodeURIComponent(task.value.work_dir)}`)
-  } else {
-    router.push(`/files/${route.params.id}`)
-  }
+  // 读取保存的路径
+  const savedPath = localStorage.getItem('fileBrowserPath_' + route.params.id)
+  const targetPath = savedPath || task.value?.work_dir || '/'
+  const workDirParam = task.value?.work_dir || ''
+  router.push(`/files/${route.params.id}?path=${encodeURIComponent(targetPath)}&workDir=${encodeURIComponent(workDirParam)}`)
 }
 </script>
 
@@ -582,7 +588,7 @@ function openFileBrowser() {
   bottom: 0;
 }
 
-/* 紧凑头部 - 合并原有头部、状态栏和底部栏 */
+/* 紧凑头部 */
 .compact-header {
   display: flex;
   align-items: center;
@@ -636,7 +642,7 @@ function openFileBrowser() {
   margin: 0;
 }
 
-/* 状态指示点 - 红绿灯效果 */
+/* 状态指示点 */
 .status-dot {
   width: 8px;
   height: 8px;
@@ -659,7 +665,7 @@ function openFileBrowser() {
   box-shadow: 0 0 6px #ffc107;
 }
 
-.header-path {
+.header-dir {
   font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -908,6 +914,16 @@ function openFileBrowser() {
 
 .side-btn-restore:active {
   background: #98c379;
+  color: #fff;
+}
+
+.side-btn-num {
+  background: rgba(229, 192, 123, 0.2);
+  color: #e5c07b;
+}
+
+.side-btn-num:active {
+  background: #e5c07b;
   color: #fff;
 }
 

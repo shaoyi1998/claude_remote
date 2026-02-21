@@ -73,11 +73,14 @@
     <!-- 文件预览/编辑面板 -->
     <div v-if="previewFile" class="preview-panel">
       <div class="preview-header">
-        <span class="preview-title">{{ previewFile.name }}</span>
+        <div class="preview-title-row">
+          <span class="preview-title">{{ previewFile.name }}</span>
+          <button class="preview-close-btn" @click="closePreview" title="关闭">✕</button>
+        </div>
         <div class="preview-actions">
           <button
             v-if="!isEditMode && !isImageFile && !isAudioFile"
-            class="btn btn-sm btn-primary"
+            class="btn btn-sm btn-secondary"
             @click="enterEditMode"
           >
             编辑
@@ -90,11 +93,9 @@
               取消
             </button>
           </template>
-          <button class="btn btn-sm btn-secondary" @click="downloadFile" title="下载文件">下载</button>
-          <button class="btn btn-sm btn-secondary" @click="copyPath" title="复制路径">路径</button>
+          <button class="btn btn-sm btn-secondary" @click="downloadFile">下载</button>
+          <button class="btn btn-sm btn-secondary" @click="copyPath">路径</button>
           <button v-if="!isEditMode && !isImageFile && !isAudioFile" class="btn btn-sm btn-secondary" @click="copyContent">复制</button>
-          <button v-if="!isEditMode" class="btn btn-sm btn-danger" @click="deleteFile">删除</button>
-          <button class="btn btn-sm btn-secondary" @click="closePreview">关闭</button>
         </div>
       </div>
       <div v-if="previewLoading" class="preview-loading">
@@ -161,7 +162,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import api from '../api'
 import hljs from 'highlight.js/lib/core'
@@ -324,10 +325,27 @@ function escapeHtml(text) {
 
 onMounted(() => {
   // 从路由参数获取初始路径和工作目录
-  const initialPath = route.query.path || '/'
+  const taskId = route.params.id
+  let initialPath = route.query.path || '/'
   workDir.value = route.query.workDir || ''
 
+  // 如果没有指定路径，尝试读取保存的路径
+  if (!route.query.path && taskId) {
+    const savedPath = localStorage.getItem('fileBrowserPath_' + taskId)
+    if (savedPath) {
+      initialPath = savedPath
+    }
+  }
+
   navigateTo(initialPath)
+})
+
+// 离开时保存当前路径
+onUnmounted(() => {
+  const taskId = route.params.id
+  if (taskId && currentPath.value) {
+    localStorage.setItem('fileBrowserPath_' + taskId, currentPath.value)
+  }
 })
 
 // 监听对话框打开，自动聚焦输入框
@@ -973,24 +991,59 @@ function formatTime(timestamp) {
 
 .preview-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color, #333);
   flex-shrink: 0;
 }
 
+.preview-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .preview-title {
   font-weight: 500;
+  font-size: 1rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-close-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 8px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.preview-close-btn:hover,
+.preview-close-btn:active {
+  background: #dc3545;
+  color: #fff;
 }
 
 .preview-actions {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .preview-loading {
